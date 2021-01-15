@@ -160,7 +160,7 @@ def main():
             primal_problem.constraints.append(
                 primal_problem.output_vector[der_model.der_name]
                 <=
-                der_model.output_maximum_timeseries.replace(np.inf, 1e12).values
+                der_model.output_maximum_timeseries.replace(np.inf, 1e9).values
             )
 
             # Power mapping.
@@ -814,7 +814,7 @@ def main():
                 -1.0
                 * cp.sum(cp.multiply(
                     dual_problem.mu_output_maximum[der_model.der_name],
-                    der_model.output_maximum_timeseries.replace(np.inf, 1e12).values
+                    der_model.output_maximum_timeseries.replace(np.inf, 1e9).values
                 ))
             )
 
@@ -972,6 +972,289 @@ def main():
 
         # Print objective.
         print(f"dual_problem.objective.value = {dual_problem.objective.value}")
+
+    # STEP 1.3: SOLVE KKT CONDITIONS.
+    if run_kkt:
+
+        # Instantiate problem.
+        kkt_problem = fledge.utils.OptimizationProblem()
+
+        # Obtain primal and dual variables.
+        kkt_problem.state_vector = primal_problem.state_vector
+        kkt_problem.control_vector = primal_problem.control_vector
+        kkt_problem.output_vector = primal_problem.output_vector
+        kkt_problem.der_thermal_power_vector = primal_problem.der_thermal_power_vector
+        kkt_problem.der_active_power_vector = primal_problem.der_active_power_vector
+        kkt_problem.der_reactive_power_vector = primal_problem.der_reactive_power_vector
+        kkt_problem.source_thermal_power = primal_problem.source_thermal_power
+        kkt_problem.source_active_power = primal_problem.source_active_power
+        kkt_problem.source_reactive_power = primal_problem.source_reactive_power
+        kkt_problem.lambda_initial_state_equation = dual_problem.lambda_initial_state_equation
+        kkt_problem.lambda_state_equation = dual_problem.lambda_state_equation
+        kkt_problem.lambda_output_equation = dual_problem.lambda_output_equation
+        kkt_problem.mu_output_minimum = dual_problem.mu_output_minimum
+        kkt_problem.mu_output_maximum = dual_problem.mu_output_maximum
+        kkt_problem.lambda_thermal_power_equation = dual_problem.lambda_thermal_power_equation
+        kkt_problem.lambda_active_power_equation = dual_problem.lambda_active_power_equation
+        kkt_problem.lambda_reactive_power_equation = dual_problem.lambda_reactive_power_equation
+        kkt_problem.mu_node_head_minium = dual_problem.mu_node_head_minium
+        kkt_problem.mu_branch_flow_maximum = dual_problem.mu_branch_flow_maximum
+        kkt_problem.lambda_pump_power_equation = dual_problem.lambda_pump_power_equation
+        kkt_problem.mu_node_voltage_magnitude_minimum = dual_problem.mu_node_voltage_magnitude_minimum
+        kkt_problem.mu_node_voltage_magnitude_maximum = dual_problem.mu_node_voltage_magnitude_maximum
+        kkt_problem.mu_branch_power_magnitude_maximum_1 = dual_problem.mu_branch_power_magnitude_maximum_1
+        kkt_problem.mu_branch_power_magnitude_maximum_2 = dual_problem.mu_branch_power_magnitude_maximum_2
+        kkt_problem.lambda_loss_active_equation = dual_problem.lambda_loss_active_equation
+        kkt_problem.lambda_loss_reactive_equation = dual_problem.lambda_loss_reactive_equation
+
+        # Obtain primal and dual constraints.
+        kkt_problem.constraints.extend(primal_problem.constraints)
+        kkt_problem.constraints.extend(dual_problem.constraints)
+
+        print()
+
+        # Define complementarity binary variables.
+        kkt_problem.psi_output_minimum = dict.fromkeys(der_model_set.flexible_der_names)
+        kkt_problem.psi_output_maximum = dict.fromkeys(der_model_set.flexible_der_names)
+        for der_name in der_model_set.flexible_der_names:
+            kkt_problem.psi_output_minimum[der_name] = (
+                cp.Variable(kkt_problem.mu_output_minimum[der_name].shape, boolean=True)
+            )
+            kkt_problem.psi_output_maximum[der_name] = (
+                cp.Variable(kkt_problem.mu_output_maximum[der_name].shape, boolean=True)
+            )
+        kkt_problem.psi_node_head_minium = cp.Variable(kkt_problem.mu_node_head_minium.shape, boolean=True)
+        kkt_problem.psi_branch_flow_maximum = cp.Variable(kkt_problem.mu_branch_flow_maximum.shape, boolean=True)
+        kkt_problem.psi_node_voltage_magnitude_minimum = cp.Variable(kkt_problem.mu_node_voltage_magnitude_minimum.shape, boolean=True)
+        kkt_problem.psi_node_voltage_magnitude_maximum = cp.Variable(kkt_problem.mu_node_voltage_magnitude_maximum.shape, boolean=True)
+        kkt_problem.psi_branch_power_magnitude_maximum_1 = cp.Variable(kkt_problem.mu_branch_power_magnitude_maximum_1.shape, boolean=True)
+        kkt_problem.psi_branch_power_magnitude_maximum_2 = cp.Variable(kkt_problem.mu_branch_power_magnitude_maximum_2.shape, boolean=True)
+
+        # Define complementarity big M parameters.
+        kkt_problem.big_m_output_minimum = cp.Parameter()
+        kkt_problem.big_m_output_maximum = cp.Parameter()
+        kkt_problem.big_m_node_head_minium = cp.Parameter()
+        kkt_problem.big_m_branch_flow_maximum = cp.Parameter()
+        kkt_problem.big_m_node_voltage_magnitude_minimum = cp.Parameter()
+        kkt_problem.big_m_node_voltage_magnitude_maximum = cp.Parameter()
+        kkt_problem.big_m_branch_power_magnitude_maximum_1 = cp.Parameter()
+        kkt_problem.big_m_branch_power_magnitude_maximum_2 = cp.Parameter()
+        kkt_problem.big_m_output_minimum.value = 1e9
+        kkt_problem.big_m_output_maximum.value = 1e9
+        kkt_problem.big_m_node_head_minium.value = 1e9
+        kkt_problem.big_m_branch_flow_maximum.value = 1e9
+        kkt_problem.big_m_node_voltage_magnitude_minimum.value = 1e9
+        kkt_problem.big_m_node_voltage_magnitude_maximum.value = 1e9
+        kkt_problem.big_m_branch_power_magnitude_maximum_1.value = 1e9
+        kkt_problem.big_m_branch_power_magnitude_maximum_2.value = 1e9
+
+        # Define complementarity constraints.
+
+        # Flexible loads.
+        for der_model in der_model_set.flexible_der_models.values():
+
+            # Output limits.
+
+            kkt_problem.constraints.append(
+                -1.0
+                * (
+                    der_model.output_minimum_timeseries.values
+                    - kkt_problem.output_vector[der_model.der_name]
+                )
+                <=
+                kkt_problem.psi_output_minimum[der_model.der_name]
+                * kkt_problem.big_m_output_minimum
+            )
+            kkt_problem.constraints.append(
+                kkt_problem.mu_output_minimum[der_model.der_name]
+                <=
+                (1 - kkt_problem.psi_output_minimum[der_model.der_name])
+                * kkt_problem.big_m_output_minimum
+            )
+
+            kkt_problem.constraints.append(
+                -1.0
+                * (
+                    kkt_problem.output_vector[der_model.der_name]
+                    - der_model.output_maximum_timeseries.replace(np.inf, 1e9).values
+                )
+                <=
+                kkt_problem.psi_output_maximum[der_model.der_name]
+                * kkt_problem.big_m_output_maximum
+            )
+            kkt_problem.constraints.append(
+                kkt_problem.mu_output_maximum[der_model.der_name]
+                <=
+                (1 - kkt_problem.psi_output_maximum[der_model.der_name])
+                * kkt_problem.big_m_output_maximum
+            )
+
+        # Thermal grid.
+
+        # Node head limit.
+        kkt_problem.constraints.append(
+            -1.0
+            * (
+                np.array([node_head_vector_minimum.ravel()])
+                - cp.transpose(
+                    linear_thermal_grid_model.sensitivity_node_head_by_der_power
+                    @ cp.transpose(kkt_problem.der_thermal_power_vector)
+                )
+            )
+            <=
+            kkt_problem.psi_node_head_minium
+            * kkt_problem.big_m_node_head_minium
+        )
+        kkt_problem.constraints.append(
+            kkt_problem.mu_node_head_minium
+            <=
+            (1 - kkt_problem.psi_node_head_minium)
+            * kkt_problem.big_m_node_head_minium
+        )
+
+        # Branch flow limit.
+        kkt_problem.constraints.append(
+            -1.0
+            * (
+                cp.transpose(
+                    linear_thermal_grid_model.sensitivity_branch_flow_by_der_power
+                    @ cp.transpose(kkt_problem.der_thermal_power_vector)
+                )
+                - np.array([branch_flow_vector_maximum.ravel()])
+            )
+            <=
+            kkt_problem.psi_branch_flow_maximum
+            * kkt_problem.big_m_branch_flow_maximum
+        )
+        kkt_problem.constraints.append(
+            kkt_problem.mu_branch_flow_maximum
+            <=
+            (1 - kkt_problem.psi_branch_flow_maximum)
+            * kkt_problem.big_m_branch_flow_maximum
+        )
+
+        # Voltage limits.
+
+        kkt_problem.constraints.append(
+            -1.0
+            * (
+                np.array([node_voltage_magnitude_vector_minimum.ravel()])
+                - np.array([np.abs(linear_electric_grid_model.power_flow_solution.node_voltage_vector.ravel())])
+                - cp.transpose(
+                    linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_active
+                    @ cp.transpose(
+                        kkt_problem.der_active_power_vector
+                        - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                    )
+                    + linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_reactive
+                    @ cp.transpose(
+                        kkt_problem.der_reactive_power_vector
+                        - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                    )
+                )
+            )
+            <=
+            kkt_problem.psi_node_voltage_magnitude_minimum
+            * kkt_problem.big_m_node_voltage_magnitude_minimum
+        )
+        kkt_problem.constraints.append(
+            kkt_problem.mu_node_voltage_magnitude_minimum
+            <=
+            (1 - kkt_problem.psi_node_voltage_magnitude_minimum)
+            * kkt_problem.big_m_node_voltage_magnitude_minimum
+        )
+
+        kkt_problem.constraints.append(
+            -1.0
+            * (
+                np.array([np.abs(linear_electric_grid_model.power_flow_solution.node_voltage_vector.ravel())])
+                + cp.transpose(
+                    linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_active
+                    @ cp.transpose(
+                        kkt_problem.der_active_power_vector
+                        - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                    )
+                    + linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_reactive
+                    @ cp.transpose(
+                        kkt_problem.der_reactive_power_vector
+                        - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                    )
+                )
+                - np.array([node_voltage_magnitude_vector_maximum.ravel()])
+            )
+            <=
+            kkt_problem.psi_node_voltage_magnitude_maximum
+            * kkt_problem.big_m_node_voltage_magnitude_maximum
+        )
+        kkt_problem.constraints.append(
+            kkt_problem.mu_node_voltage_magnitude_maximum
+            <=
+            (1 - kkt_problem.psi_node_voltage_magnitude_maximum)
+            * kkt_problem.big_m_node_voltage_magnitude_maximum
+        )
+
+        # Branch flow limits.
+
+        kkt_problem.constraints.append(
+            -1.0
+            * (
+                np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_1.ravel())])
+                + cp.transpose(
+                    linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_active
+                    @ cp.transpose(
+                        kkt_problem.der_active_power_vector
+                        - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                    )
+                    + linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_reactive
+                    @ cp.transpose(
+                        kkt_problem.der_reactive_power_vector
+                        - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                    )
+                )
+                - np.array([branch_power_magnitude_vector_maximum.ravel()])
+            )
+            <=
+            kkt_problem.psi_branch_power_magnitude_maximum_1
+            * kkt_problem.big_m_branch_power_magnitude_maximum_1
+        )
+        kkt_problem.constraints.append(
+            kkt_problem.mu_branch_power_magnitude_maximum_1
+            <=
+            (1 - kkt_problem.psi_branch_power_magnitude_maximum_1)
+            * kkt_problem.big_m_branch_power_magnitude_maximum_1
+        )
+
+        kkt_problem.constraints.append(
+            -1.0
+            * (
+                np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_2.ravel())])
+                + cp.transpose(
+                    linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_active
+                    @ cp.transpose(
+                        kkt_problem.der_active_power_vector
+                        - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                    )
+                    + linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_reactive
+                    @ cp.transpose(
+                        kkt_problem.der_reactive_power_vector
+                        - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                    )
+                )
+                - np.array([branch_power_magnitude_vector_maximum.ravel()])
+            )
+            <=
+            kkt_problem.psi_branch_power_magnitude_maximum_2
+            * kkt_problem.big_m_branch_power_magnitude_maximum_2
+        )
+        kkt_problem.constraints.append(
+            kkt_problem.mu_branch_power_magnitude_maximum_2
+            <=
+            (1 - kkt_problem.psi_branch_power_magnitude_maximum_2)
+            * kkt_problem.big_m_branch_power_magnitude_maximum_2
+        )
+
+        # Solve problem.
+        kkt_problem.solve()
 
     # Print results path.
     fledge.utils.launch(results_path)
