@@ -16,7 +16,7 @@ def main():
     scenario_name = 'singapore_tanjongpagar_modified'
     results_path = os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'results', 'step_1')
     run_primal = True
-    run_dual = False
+    run_dual = True
     run_kkt = False
 
     # Clear / instantiate results directory.
@@ -67,7 +67,22 @@ def main():
     timesteps = scenario_data.timesteps
     timestep_interval_hours = (timesteps[1] - timesteps[0]) / pd.Timedelta('1h')
 
+    # Invert sign of losses.
+    # - Power values of loads are negative by convention. Hence, sign of losses should be negative for power balance.
+
+    # Thermal grid.
+    linear_thermal_grid_model.sensitivity_pump_power_by_der_power *= -1.0
+    linear_thermal_grid_model.thermal_power_flow_solution.pump_power *= -1.0
+
+    # Electric grid.
+    linear_electric_grid_model.sensitivity_loss_active_by_der_power_active *= -1.0
+    linear_electric_grid_model.sensitivity_loss_active_by_der_power_reactive *= -1.0
+    linear_electric_grid_model.sensitivity_loss_reactive_by_der_power_active *= -1.0
+    linear_electric_grid_model.sensitivity_loss_reactive_by_der_power_reactive *= -1.0
+    linear_electric_grid_model.power_flow_solution.loss *= -1.0
+
     # Apply base power / voltage scaling.
+    # - Scale values to avoid numerical issues.
     base_power = 1e6
     base_voltage = 22e3
 
@@ -105,8 +120,9 @@ def main():
     branch_power_magnitude_vector_maximum /= base_power
 
     # Energy price.
-    # - Price values are in S$/kWh.
-    price_data.price_timeseries *= base_power * timestep_interval_hours / 1e3
+    # - Conversion of price values from S$/kWh to S$/p.u. for convenience. Currency S$ is SGD.
+    # - DER power values are negative for load by convention. Hence, sign of price values is inverted here.
+    price_data.price_timeseries *= -1.0 * base_power / 1e3 * timestep_interval_hours
 
     # STEP 1.1: SOLVE PRIMAL PROBLEM.
     if run_primal or run_kkt:  # Primal constraints are also needed for KKT problem.
@@ -273,7 +289,7 @@ def main():
             thermal_grid_model.cooling_plant_efficiency ** -1
             * (
                 primal_problem.source_thermal_power
-                + cp.sum((
+                + cp.sum(-1.0 * (
                     primal_problem.der_thermal_power_vector
                 ), axis=1, keepdims=True)  # Sum along DERs, i.e. sum for each timestep.
             )
@@ -323,24 +339,6 @@ def main():
         )
 
         # Branch flow limits.
-        # primal_problem.constraints.append(
-        #     - 1.0
-        #     * np.array([branch_power_magnitude_vector_maximum.ravel()])
-        #     <=
-        #     np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_1.ravel())])
-        #     + cp.transpose(
-        #         linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_active
-        #         @ cp.transpose(
-        #             primal_problem.der_active_power_vector
-        #             - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
-        #         )
-        #         + linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_reactive
-        #         @ cp.transpose(
-        #             primal_problem.der_reactive_power_vector
-        #             - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
-        #         )
-        #     )
-        # )
         primal_problem.constraints.append(
             np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_1.ravel())])
             + cp.transpose(
@@ -358,24 +356,6 @@ def main():
             <=
             np.array([branch_power_magnitude_vector_maximum.ravel()])
         )
-        # primal_problem.constraints.append(
-        #     -1.0
-        #     * np.array([branch_power_magnitude_vector_maximum.ravel()])
-        #     <=
-        #     np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_2.ravel())])
-        #     + cp.transpose(
-        #         linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_active
-        #         @ cp.transpose(
-        #             primal_problem.der_active_power_vector
-        #             - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
-        #         )
-        #         + linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_reactive
-        #         @ cp.transpose(
-        #             primal_problem.der_reactive_power_vector
-        #             - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
-        #         )
-        #     )
-        # )
         primal_problem.constraints.append(
             np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_2.ravel())])
             + cp.transpose(
@@ -397,7 +377,7 @@ def main():
         # Power balance.
         primal_problem.constraints.append(
             primal_problem.source_active_power
-            + cp.sum((
+            + cp.sum(-1.0 * (
                 primal_problem.der_active_power_vector
             ), axis=1, keepdims=True)  # Sum along DERs, i.e. sum for each timestep.
             ==
@@ -455,55 +435,81 @@ def main():
         # Obtain results.
 
         # Flexible loads.
-        state_vector = pd.DataFrame(0.0, index=der_model_set.timesteps, columns=der_model_set.states)
-        control_vector = pd.DataFrame(0.0, index=der_model_set.timesteps, columns=der_model_set.controls)
-        output_vector = pd.DataFrame(0.0, index=der_model_set.timesteps, columns=der_model_set.outputs)
+        primal_state_vector = pd.DataFrame(0.0, index=der_model_set.timesteps, columns=der_model_set.states)
+        primal_control_vector = pd.DataFrame(0.0, index=der_model_set.timesteps, columns=der_model_set.controls)
+        primal_output_vector = pd.DataFrame(0.0, index=der_model_set.timesteps, columns=der_model_set.outputs)
         for der_name in der_model_set.flexible_der_names:
-            state_vector.loc[:, (der_name, slice(None))] = (
+            primal_state_vector.loc[:, (der_name, slice(None))] = (
                 primal_problem.state_vector[der_name].value
             )
-            control_vector.loc[:, (der_name, slice(None))] = (
+            primal_control_vector.loc[:, (der_name, slice(None))] = (
                 primal_problem.control_vector[der_name].value
             )
-            output_vector.loc[:, (der_name, slice(None))] = (
+            primal_output_vector.loc[:, (der_name, slice(None))] = (
                 primal_problem.output_vector[der_name].value
             )
 
         # Thermal grid.
-        der_thermal_power_vector = (
+        primal_der_thermal_power_vector = (
             pd.DataFrame(
                 primal_problem.der_thermal_power_vector.value,
                 columns=linear_thermal_grid_model.thermal_grid_model.ders,
                 index=timesteps
             )
         )
+        primal_source_thermal_power = (
+            pd.DataFrame(
+                primal_problem.source_thermal_power.value,
+                columns=['total'],
+                index=timesteps
+            )
+        )
 
         # Electric grid.
-        der_active_power_vector = (
+        primal_der_active_power_vector = (
             pd.DataFrame(
                 primal_problem.der_active_power_vector.value,
                 columns=linear_electric_grid_model.electric_grid_model.ders,
                 index=timesteps
             )
         )
-        der_reactive_power_vector = (
+        primal_der_reactive_power_vector = (
             pd.DataFrame(
                 primal_problem.der_reactive_power_vector.value,
                 columns=linear_electric_grid_model.electric_grid_model.ders,
                 index=timesteps
             )
         )
+        primal_source_active_power = (
+            pd.DataFrame(
+                primal_problem.source_active_power.value,
+                columns=['total'],
+                index=timesteps
+            )
+        )
+        primal_source_reactive_power = (
+            pd.DataFrame(
+                primal_problem.source_reactive_power.value,
+                columns=['total'],
+                index=timesteps
+            )
+        )
 
         # Store results.
-        state_vector.to_csv(os.path.join(results_path, 'primal_state_vector.csv'))
-        control_vector.to_csv(os.path.join(results_path, 'primal_control_vector.csv'))
-        output_vector.to_csv(os.path.join(results_path, 'primal_output_vector.csv'))
-        der_thermal_power_vector.to_csv(os.path.join(results_path, 'primal_der_thermal_power_vector.csv'))
-        der_active_power_vector.to_csv(os.path.join(results_path, 'primal_der_active_power_vector.csv'))
-        der_reactive_power_vector.to_csv(os.path.join(results_path, 'primal_der_reactive_power_vector.csv'))
+        primal_state_vector.to_csv(os.path.join(results_path, 'primal_state_vector.csv'))
+        primal_control_vector.to_csv(os.path.join(results_path, 'primal_control_vector.csv'))
+        primal_output_vector.to_csv(os.path.join(results_path, 'primal_output_vector.csv'))
+        primal_der_thermal_power_vector.to_csv(os.path.join(results_path, 'primal_der_thermal_power_vector.csv'))
+        primal_source_thermal_power.to_csv(os.path.join(results_path, 'primal_source_thermal_power.csv'))
+        primal_der_active_power_vector.to_csv(os.path.join(results_path, 'primal_der_active_power_vector.csv'))
+        primal_der_reactive_power_vector.to_csv(os.path.join(results_path, 'primal_der_reactive_power_vector.csv'))
+        primal_source_active_power.to_csv(os.path.join(results_path, 'primal_source_active_power.csv'))
+        primal_source_reactive_power.to_csv(os.path.join(results_path, 'primal_source_reactive_power.csv'))
 
         # Print objective.
-        print(f"primal_problem.objective.value = {primal_problem.objective.value}")
+        primal_objective = pd.Series(primal_problem.objective.value, index=['primal_objective'])
+        primal_objective.to_csv(os.path.join(results_path, 'primal_objective.csv'))
+        print(f"primal_objective = {primal_objective.values}")
 
     # STEP 1.2: SOLVE DUAL PROBLEM.
     if run_dual or run_kkt:  # Primal constraints are also needed for KKT problem.
@@ -790,10 +796,8 @@ def main():
             0.0
             ==
             (
-                -1.0  # Load is negative power by convention, hence price must be inverted.
-                * np.transpose([price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values])
+                np.transpose([price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values])
                 + dual_problem.lambda_pump_power_equation
-                * thermal_grid_model.cooling_plant_efficiency ** -1
             )
         )
 
@@ -802,8 +806,7 @@ def main():
             0.0
             ==
             (
-                -1.0  # Load is negative power by convention, hence price must be inverted.
-                * np.transpose([price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values])
+                np.transpose([price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values])
                 + dual_problem.lambda_loss_active_equation
             )
         )
@@ -813,8 +816,6 @@ def main():
             0.0
             ==
             (
-                # -1.0  # Load is negative power by convention, hence price must be inverted.
-                # * np.transpose([price_data.price_timeseries.loc[:, ('reactive_power', 'source', 'source')].values])
                 dual_problem.lambda_loss_reactive_equation
             )
         )
@@ -979,7 +980,7 @@ def main():
         )
         dual_problem.objective += (
             cp.sum(cp.multiply(
-                dual_problem.lambda_active_power_equation,
+                dual_problem.lambda_loss_active_equation,
                 (
                     -1.0
                     * np.array([np.real(linear_electric_grid_model.power_flow_solution.loss)])
@@ -996,7 +997,7 @@ def main():
         )
         dual_problem.objective += (
             cp.sum(cp.multiply(
-                dual_problem.lambda_reactive_power_equation,
+                dual_problem.lambda_loss_reactive_equation,
                 (
                     -1.0
                     * np.array([np.imag(linear_electric_grid_model.power_flow_solution.loss)])
@@ -1012,14 +1013,150 @@ def main():
             ))
         )
 
-        # Invert objective for maximisation.
+        # Invert sign of objective for maximisation.
         dual_problem.objective *= -1.0
 
         # Solve problem.
         dual_problem.solve()
 
+        # Obtain results.
+
+        # Flexible loads.
+        dual_lambda_initial_state_equation = pd.DataFrame(0.0, index=der_model_set.timesteps[:1], columns=der_model_set.states)
+        dual_lambda_state_equation = pd.DataFrame(0.0, index=der_model_set.timesteps[:-1], columns=der_model_set.states)
+        dual_lambda_output_equation = pd.DataFrame(0.0, index=der_model_set.timesteps, columns=der_model_set.outputs)
+        dual_mu_output_minimum = pd.DataFrame(0.0, index=der_model_set.timesteps, columns=der_model_set.outputs)
+        dual_mu_output_maximum = pd.DataFrame(0.0, index=der_model_set.timesteps, columns=der_model_set.outputs)
+        for der_name in der_model_set.flexible_der_names:
+            dual_lambda_initial_state_equation.loc[:, (der_name, slice(None))] = (
+                dual_problem.lambda_initial_state_equation[der_name].value
+            )
+            dual_lambda_state_equation.loc[:, (der_name, slice(None))] = (
+                dual_problem.lambda_state_equation[der_name].value
+            )
+            dual_lambda_output_equation.loc[:, (der_name, slice(None))] = (
+                dual_problem.lambda_output_equation[der_name].value
+            )
+            dual_mu_output_minimum.loc[:, (der_name, slice(None))] = (
+                dual_problem.mu_output_minimum[der_name].value
+            )
+            dual_mu_output_maximum.loc[:, (der_name, slice(None))] = (
+                dual_problem.mu_output_maximum[der_name].value
+            )
+
+        # Flexible loads: Power equations.
+        dual_lambda_thermal_power_equation = (
+            pd.DataFrame(
+                dual_problem.lambda_thermal_power_equation.value,
+                index=timesteps,
+                columns=thermal_grid_model.ders
+            )
+        )
+        dual_lambda_active_power_equation = (
+            pd.DataFrame(
+                dual_problem.lambda_active_power_equation.value,
+                index=timesteps,
+                columns=electric_grid_model.ders
+            )
+        )
+        dual_lambda_reactive_power_equation = (
+            pd.DataFrame(
+                dual_problem.lambda_reactive_power_equation.value,
+                index=timesteps,
+                columns=electric_grid_model.ders
+            )
+        )
+
+        # Thermal grid.
+        dual_mu_node_head_minium = (
+            pd.DataFrame(
+                dual_problem.mu_node_head_minium.value,
+                index=timesteps,
+                columns=thermal_grid_model.nodes
+            )
+        )
+        dual_mu_branch_flow_maximum = (
+            pd.DataFrame(
+                dual_problem.mu_branch_flow_maximum.value,
+                index=timesteps,
+                columns=thermal_grid_model.branches
+            )
+        )
+        dual_lambda_pump_power_equation = (
+            pd.DataFrame(
+                dual_problem.lambda_pump_power_equation.value,
+                index=timesteps,
+                columns=['total']
+            )
+        )
+
+        # Electric grid.
+        dual_mu_node_voltage_magnitude_minimum = (
+            pd.DataFrame(
+                dual_problem.mu_node_voltage_magnitude_minimum.value,
+                index=timesteps,
+                columns=electric_grid_model.nodes
+            )
+        )
+        dual_mu_node_voltage_magnitude_maximum = (
+            pd.DataFrame(
+                dual_problem.mu_node_voltage_magnitude_maximum.value,
+                index=timesteps,
+                columns=electric_grid_model.nodes
+            )
+        )
+        dual_mu_branch_power_magnitude_maximum_1 = (
+            pd.DataFrame(
+                dual_problem.mu_branch_power_magnitude_maximum_1.value,
+                index=timesteps,
+                columns=electric_grid_model.branches
+            )
+        )
+        dual_mu_branch_power_magnitude_maximum_2 = (
+            pd.DataFrame(
+                dual_problem.mu_branch_power_magnitude_maximum_2.value,
+                index=timesteps,
+                columns=electric_grid_model.branches
+            )
+        )
+        dual_lambda_loss_active_equation = (
+            pd.DataFrame(
+                dual_problem.lambda_loss_active_equation.value,
+                index=timesteps,
+                columns=['total']
+            )
+        )
+        dual_lambda_loss_reactive_equation = (
+            pd.DataFrame(
+                dual_problem.lambda_loss_reactive_equation.value,
+                index=timesteps,
+                columns=['total']
+            )
+        )
+
+        # Store results.
+        dual_lambda_initial_state_equation.to_csv(os.path.join(results_path, 'dual_lambda_initial_state_equation.csv'))
+        dual_lambda_state_equation.to_csv(os.path.join(results_path, 'dual_lambda_state_equation.csv'))
+        dual_lambda_output_equation.to_csv(os.path.join(results_path, 'dual_lambda_output_equation.csv'))
+        dual_mu_output_minimum.to_csv(os.path.join(results_path, 'dual_mu_output_minimum.csv'))
+        dual_mu_output_maximum.to_csv(os.path.join(results_path, 'dual_mu_output_maximum.csv'))
+        dual_lambda_thermal_power_equation.to_csv(os.path.join(results_path, 'dual_lambda_thermal_power_equation.csv'))
+        dual_lambda_active_power_equation.to_csv(os.path.join(results_path, 'dual_lambda_active_power_equation.csv'))
+        dual_lambda_reactive_power_equation.to_csv(os.path.join(results_path, 'dual_lambda_reactive_power_equation.csv'))
+        dual_mu_node_head_minium.to_csv(os.path.join(results_path, 'dual_mu_node_head_minium.csv'))
+        dual_mu_branch_flow_maximum.to_csv(os.path.join(results_path, 'dual_mu_branch_flow_maximum.csv'))
+        dual_lambda_pump_power_equation.to_csv(os.path.join(results_path, 'dual_lambda_pump_power_equation.csv'))
+        dual_mu_node_voltage_magnitude_minimum.to_csv(os.path.join(results_path, 'dual_mu_node_voltage_magnitude_minimum.csv'))
+        dual_mu_node_voltage_magnitude_maximum.to_csv(os.path.join(results_path, 'dual_mu_node_voltage_magnitude_maximum.csv'))
+        dual_mu_branch_power_magnitude_maximum_1.to_csv(os.path.join(results_path, 'dual_mu_branch_power_magnitude_maximum_1.csv'))
+        dual_mu_branch_power_magnitude_maximum_2.to_csv(os.path.join(results_path, 'dual_mu_branch_power_magnitude_maximum_2.csv'))
+        dual_lambda_loss_active_equation.to_csv(os.path.join(results_path, 'dual_lambda_loss_active_equation.csv'))
+        dual_lambda_loss_reactive_equation.to_csv(os.path.join(results_path, 'dual_lambda_loss_reactive_equation.csv'))
+
         # Print objective.
-        print(f"dual_problem.objective.value = {dual_problem.objective.value}")
+        dual_objective = pd.Series(-1.0 * dual_problem.objective.value, index=['dual_objective'])
+        dual_objective.to_csv(os.path.join(results_path, 'dual_objective.csv'))
+        print(f"dual_objective = {dual_objective.values}")
 
     # STEP 1.3: SOLVE KKT CONDITIONS.
     if run_kkt:
@@ -1058,8 +1195,6 @@ def main():
         # Obtain primal and dual constraints.
         kkt_problem.constraints.extend(primal_problem.constraints)
         kkt_problem.constraints.extend(dual_problem.constraints)
-
-        print()
 
         # Define complementarity binary variables.
         kkt_problem.psi_output_minimum = dict.fromkeys(der_model_set.flexible_der_names)
@@ -1303,6 +1438,11 @@ def main():
 
         # Solve problem.
         kkt_problem.solve()
+
+    # Store price timeseries for reference.
+    price_data.price_timeseries.loc[
+        :, [('active_power', 'source', 'source')]
+    ].to_csv(os.path.join(results_path, 'price_timeseries.csv'))
 
     # Print results path.
     fledge.utils.launch(results_path)
