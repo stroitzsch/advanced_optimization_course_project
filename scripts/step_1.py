@@ -166,22 +166,28 @@ def main():
             # Power mapping.
             der_index = int(fledge.utils.get_index(electric_grid_model.ders, der_name=der_model.der_name))
             primal_problem.constraints.append(
-                primal_problem.der_active_power_vector[:, der_index]
+                primal_problem.der_active_power_vector[:, [der_index]]
                 ==
-                der_model.mapping_active_power_by_output.values
-                @ cp.transpose(primal_problem.output_vector[der_model.der_name])
+                cp.transpose(
+                    np.array([der_model.mapping_active_power_by_output.values])
+                    @ cp.transpose(primal_problem.output_vector[der_model.der_name])
+                )
             )
             primal_problem.constraints.append(
-                primal_problem.der_reactive_power_vector[:, der_index]
+                primal_problem.der_reactive_power_vector[:, [der_index]]
                 ==
-                der_model.mapping_reactive_power_by_output.values
-                @ cp.transpose(primal_problem.output_vector[der_model.der_name])
+                cp.transpose(
+                    np.array([der_model.mapping_reactive_power_by_output.values])
+                    @ cp.transpose(primal_problem.output_vector[der_model.der_name])
+                )
             )
             primal_problem.constraints.append(
-                primal_problem.der_thermal_power_vector[:, der_index]
+                primal_problem.der_thermal_power_vector[:, [der_index]]
                 ==
-                der_model.mapping_thermal_power_by_output.values
-                @ cp.transpose(primal_problem.output_vector[der_model.der_name])
+                cp.transpose(
+                    np.array([der_model.mapping_thermal_power_by_output.values])
+                    @ cp.transpose(primal_problem.output_vector[der_model.der_name])
+                )
             )
 
         # Thermal grid.
