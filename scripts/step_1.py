@@ -508,6 +508,20 @@ def main():
         primal_source_active_power.to_csv(os.path.join(results_path, 'primal_source_active_power.csv'))
         primal_source_reactive_power.to_csv(os.path.join(results_path, 'primal_source_reactive_power.csv'))
 
+        # Obtain variable count / dimensions.
+        primal_variable_count = (
+            sum(np.multiply(*primal_problem.state_vector[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*primal_problem.control_vector[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*primal_problem.output_vector[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + np.multiply(*primal_problem.der_thermal_power_vector.shape)
+            + np.multiply(*primal_problem.der_active_power_vector.shape)
+            + np.multiply(*primal_problem.der_reactive_power_vector.shape)
+            + np.multiply(*primal_problem.source_thermal_power.shape)
+            + np.multiply(*primal_problem.source_active_power.shape)
+            + np.multiply(*primal_problem.source_reactive_power.shape)
+        )
+        print(f"primal_variable_count = {primal_variable_count}")
+
         # Print objective.
         primal_objective = pd.Series(primal_problem.objective.value, index=['primal_objective'])
         primal_objective.to_csv(os.path.join(results_path, 'primal_objective.csv'))
@@ -1157,6 +1171,28 @@ def main():
         dual_lambda_loss_active_equation.to_csv(os.path.join(results_path, 'dual_lambda_loss_active_equation.csv'))
         dual_lambda_loss_reactive_equation.to_csv(os.path.join(results_path, 'dual_lambda_loss_reactive_equation.csv'))
 
+        # Obtain variable count / dimensions.
+        dual_variable_count = (
+            sum(np.multiply(*dual_problem.lambda_initial_state_equation[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*dual_problem.lambda_state_equation[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*dual_problem.lambda_output_equation[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*dual_problem.mu_output_minimum[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*dual_problem.mu_output_maximum[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + np.multiply(*dual_problem.lambda_thermal_power_equation.shape)
+            + np.multiply(*dual_problem.lambda_active_power_equation.shape)
+            + np.multiply(*dual_problem.lambda_reactive_power_equation.shape)
+            + np.multiply(*dual_problem.mu_node_head_minium.shape)
+            + np.multiply(*dual_problem.mu_branch_flow_maximum.shape)
+            + np.multiply(*dual_problem.lambda_pump_power_equation.shape)
+            + np.multiply(*dual_problem.mu_node_voltage_magnitude_minimum.shape)
+            + np.multiply(*dual_problem.mu_node_voltage_magnitude_maximum.shape)
+            + np.multiply(*dual_problem.mu_branch_power_magnitude_maximum_1.shape)
+            + np.multiply(*dual_problem.mu_branch_power_magnitude_maximum_2.shape)
+            + np.multiply(*dual_problem.lambda_loss_active_equation.shape)
+            + np.multiply(*dual_problem.lambda_loss_reactive_equation.shape)
+        )
+        print(f"dual_variable_count = {dual_variable_count}")
+
         # Print objective.
         dual_objective = pd.Series(-1.0 * dual_problem.objective.value, index=['dual_objective'])
         dual_objective.to_csv(os.path.join(results_path, 'dual_objective.csv'))
@@ -1642,6 +1678,45 @@ def main():
         kkt_mu_branch_power_magnitude_maximum_2.to_csv(os.path.join(results_path, 'kkt_mu_branch_power_magnitude_maximum_2.csv'))
         kkt_lambda_loss_active_equation.to_csv(os.path.join(results_path, 'kkt_lambda_loss_active_equation.csv'))
         kkt_lambda_loss_reactive_equation.to_csv(os.path.join(results_path, 'kkt_lambda_loss_reactive_equation.csv'))
+
+        # Obtain variable count / dimensions.
+        kkt_variable_count = (
+            sum(np.multiply(*kkt_problem.state_vector[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*kkt_problem.control_vector[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*kkt_problem.output_vector[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + np.multiply(*kkt_problem.der_thermal_power_vector.shape)
+            + np.multiply(*kkt_problem.der_active_power_vector.shape)
+            + np.multiply(*kkt_problem.der_reactive_power_vector.shape)
+            + np.multiply(*kkt_problem.source_thermal_power.shape)
+            + np.multiply(*kkt_problem.source_active_power.shape)
+            + np.multiply(*kkt_problem.source_reactive_power.shape)
+            + sum(np.multiply(*kkt_problem.lambda_initial_state_equation[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*kkt_problem.lambda_state_equation[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*kkt_problem.lambda_output_equation[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*kkt_problem.mu_output_minimum[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*kkt_problem.mu_output_maximum[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + np.multiply(*kkt_problem.lambda_thermal_power_equation.shape)
+            + np.multiply(*kkt_problem.lambda_active_power_equation.shape)
+            + np.multiply(*kkt_problem.lambda_reactive_power_equation.shape)
+            + np.multiply(*kkt_problem.mu_node_head_minium.shape)
+            + np.multiply(*kkt_problem.mu_branch_flow_maximum.shape)
+            + np.multiply(*kkt_problem.lambda_pump_power_equation.shape)
+            + np.multiply(*kkt_problem.mu_node_voltage_magnitude_minimum.shape)
+            + np.multiply(*kkt_problem.mu_node_voltage_magnitude_maximum.shape)
+            + np.multiply(*kkt_problem.mu_branch_power_magnitude_maximum_1.shape)
+            + np.multiply(*kkt_problem.mu_branch_power_magnitude_maximum_2.shape)
+            + np.multiply(*kkt_problem.lambda_loss_active_equation.shape)
+            + np.multiply(*kkt_problem.lambda_loss_reactive_equation.shape)
+            + sum(np.multiply(*kkt_problem.psi_output_minimum[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + sum(np.multiply(*kkt_problem.psi_output_maximum[der_name].shape) for der_name in der_model_set.flexible_der_names)
+            + np.multiply(*kkt_problem.psi_node_head_minium.shape)
+            + np.multiply(*kkt_problem.psi_branch_flow_maximum.shape)
+            + np.multiply(*kkt_problem.psi_node_voltage_magnitude_minimum.shape)
+            + np.multiply(*kkt_problem.psi_node_voltage_magnitude_maximum.shape)
+            + np.multiply(*kkt_problem.psi_branch_power_magnitude_maximum_1.shape)
+            + np.multiply(*kkt_problem.psi_branch_power_magnitude_maximum_2.shape)
+        )
+        print(f"kkt_variable_count = {kkt_variable_count}")
 
         # Print objective.
         # - The primal objective is evaluated based on the KKT solution,
