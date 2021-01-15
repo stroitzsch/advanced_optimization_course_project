@@ -430,7 +430,9 @@ def main():
     if run_primal:
 
         # Solve problem.
+        fledge.utils.log_time('primal solution')
         primal_problem.solve()
+        fledge.utils.log_time('primal solution')
 
         # Obtain results.
 
@@ -1017,7 +1019,9 @@ def main():
         dual_problem.objective *= -1.0
 
         # Solve problem.
+        fledge.utils.log_time('dual solution')
         dual_problem.solve()
+        fledge.utils.log_time('dual solution')
 
         # Obtain results.
 
@@ -1438,7 +1442,9 @@ def main():
         )
 
         # Solve problem.
+        fledge.utils.log_time('KKT solution')
         kkt_problem.solve()
+        fledge.utils.log_time('KKT solution')
 
         # Obtain results.
 
