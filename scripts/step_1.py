@@ -416,8 +416,6 @@ def main():
             )
         )
 
-    if run_primal:
-
         # Define objective.
         primal_problem.objective += (
             price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
@@ -428,6 +426,8 @@ def main():
             price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
             @ primal_problem.source_active_power
         )
+
+    if run_primal:
 
         # Solve problem.
         primal_problem.solve()
@@ -1636,6 +1636,13 @@ def main():
         kkt_mu_branch_power_magnitude_maximum_2.to_csv(os.path.join(results_path, 'kkt_mu_branch_power_magnitude_maximum_2.csv'))
         kkt_lambda_loss_active_equation.to_csv(os.path.join(results_path, 'kkt_lambda_loss_active_equation.csv'))
         kkt_lambda_loss_reactive_equation.to_csv(os.path.join(results_path, 'kkt_lambda_loss_reactive_equation.csv'))
+
+        # Print objective.
+        # - The primal objective is evaluated based on the KKT solution,
+        #   because the KKT problem itself does not have an objective.
+        kkt_objective = pd.Series(primal_problem.objective.value, index=['kkt_objective'])
+        kkt_objective.to_csv(os.path.join(results_path, 'kkt_objective.csv'))
+        print(f"kkt_objective = {kkt_objective.values}")
 
     # Store price timeseries for reference.
     price_data.price_timeseries.loc[
