@@ -598,13 +598,13 @@ def main():
                 cp.Variable((
                     len(der_model_set.flexible_der_models[der_name].timesteps),
                     len(der_model_set.flexible_der_models[der_name].outputs)
-                ))
+                ), nonneg=True)
             )
             optimization_problem.mu_output_maximum[der_name] = (
                 cp.Variable((
                     len(der_model_set.flexible_der_models[der_name].timesteps),
                     len(der_model_set.flexible_der_models[der_name].outputs)
-                ))
+                ), nonneg=True)
             )
 
         # Flexible loads: Power equations.
@@ -620,10 +620,10 @@ def main():
 
         # Thermal grid.
         optimization_problem.mu_node_head_minium = (
-            cp.Variable((len(timesteps), len(thermal_grid_model.nodes)))
+            cp.Variable((len(timesteps), len(thermal_grid_model.nodes)), nonneg=True)
         )
         optimization_problem.mu_branch_flow_maximum = (
-            cp.Variable((len(timesteps), len(thermal_grid_model.branches)))
+            cp.Variable((len(timesteps), len(thermal_grid_model.branches)), nonneg=True)
         )
         optimization_problem.lambda_pump_power_equation = (
             cp.Variable((len(timesteps), 1))
@@ -631,16 +631,16 @@ def main():
 
         # Electric grid.
         optimization_problem.mu_node_voltage_magnitude_minimum = (
-            cp.Variable((len(timesteps), len(electric_grid_model.nodes)))
+            cp.Variable((len(timesteps), len(electric_grid_model.nodes)), nonneg=True)
         )
         optimization_problem.mu_node_voltage_magnitude_maximum = (
-            cp.Variable((len(timesteps), len(electric_grid_model.nodes)))
+            cp.Variable((len(timesteps), len(electric_grid_model.nodes)), nonneg=True)
         )
         optimization_problem.mu_branch_power_magnitude_maximum_1 = (
-            cp.Variable((len(timesteps), len(electric_grid_model.branches)))
+            cp.Variable((len(timesteps), len(electric_grid_model.branches)), nonneg=True)
         )
         optimization_problem.mu_branch_power_magnitude_maximum_2 = (
-            cp.Variable((len(timesteps), len(electric_grid_model.branches)))
+            cp.Variable((len(timesteps), len(electric_grid_model.branches)), nonneg=True)
         )
         optimization_problem.lambda_loss_active_equation = cp.Variable((len(timesteps), 1))
         optimization_problem.lambda_loss_reactive_equation = cp.Variable((len(timesteps), 1))
@@ -775,11 +775,11 @@ def main():
                 optimization_problem.lambda_active_power_equation
                 - (
                     optimization_problem.mu_node_voltage_magnitude_minimum
-                    @ linear_electric_grid_model.sensitivity_voltage_by_der_power_active
+                    @ linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_active
                 )
                 + (
                     optimization_problem.mu_node_voltage_magnitude_maximum
-                    @ linear_electric_grid_model.sensitivity_voltage_by_der_power_active
+                    @ linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_active
                 )
                 + (
                     optimization_problem.mu_branch_power_magnitude_maximum_1
@@ -811,11 +811,11 @@ def main():
                 optimization_problem.lambda_reactive_power_equation
                 - (
                     optimization_problem.mu_node_voltage_magnitude_minimum
-                    @ linear_electric_grid_model.sensitivity_voltage_by_der_power_reactive
+                    @ linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_reactive
                 )
                 + (
                     optimization_problem.mu_node_voltage_magnitude_maximum
-                    @ linear_electric_grid_model.sensitivity_voltage_by_der_power_reactive
+                    @ linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_reactive
                 )
                 + (
                     optimization_problem.mu_branch_power_magnitude_maximum_1
@@ -844,7 +844,8 @@ def main():
             0.0
             ==
             (
-                np.transpose([price_data.price_timeseries.loc[:, ('thermal_power', 'source', 'source')].values])
+                -1.0  # Load is negative power by convention, hence price must be inverted.
+                * np.transpose([price_data.price_timeseries.loc[:, ('thermal_power', 'source', 'source')].values])
                 + optimization_problem.lambda_pump_power_equation
                 * thermal_grid_model.cooling_plant_efficiency ** -1
             )
@@ -855,7 +856,8 @@ def main():
             0.0
             ==
             (
-                np.transpose([price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values])
+                -1.0  # Load is negative power by convention, hence price must be inverted.
+                * np.transpose([price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values])
                 + optimization_problem.lambda_loss_active_equation
             )
         )
@@ -865,8 +867,9 @@ def main():
             0.0
             ==
             (
-                # np.transpose([price_data.price_timeseries.loc[:, ('reactive_power', 'source', 'source')].values])
-                optimization_problem.lambda_loss_active_equation
+                # -1.0  # Load is negative power by convention, hence price must be inverted.
+                # * np.transpose([price_data.price_timeseries.loc[:, ('reactive_power', 'source', 'source')].values])
+                optimization_problem.lambda_loss_reactive_equation
             )
         )
 
@@ -911,7 +914,7 @@ def main():
                 -1.0
                 * cp.sum(cp.multiply(
                     optimization_problem.mu_output_maximum[der_model.der_name],
-                    der_model.output_maximum_timeseries.replace(np.inf, 1e6).values
+                    der_model.output_maximum_timeseries.replace(np.inf, 1e12).values
                 ))
             )
 
@@ -933,12 +936,13 @@ def main():
             cp.sum(cp.multiply(
                 optimization_problem.mu_branch_flow_maximum,
                 (
-                    np.array([branch_flow_vector_maximum])
                     # - branch_flow_vector_reference
                     # + (
                     #     linear_thermal_grid_model.sensitivity_branch_flow_by_der_power
                     #     @ der_thermal_power_vector_reference
                     # )
+                    - 1.0
+                    * np.array([branch_flow_vector_maximum])
                 )
             ))
         )
