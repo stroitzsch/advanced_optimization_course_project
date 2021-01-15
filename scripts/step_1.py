@@ -27,39 +27,86 @@ def main():
     except PermissionError:
         pass
 
-    # Recreate / overwrite FLEDGE database, to incorporate changes in the scenario definition.
-    fledge.data_interface.recreate_database()
+    # STEP 1.0: SETUP MODELS.
+
+    # Read scenario definition into FLEDGE.
+    # fledge.data_interface.recreate_database()
 
     # Obtain data & models.
-    scenario_data = fledge.data_interface.ScenarioData(scenario_name)
-    price_data = fledge.data_interface.PriceData(scenario_name)
-    electric_grid_model = fledge.electric_grid_models.ElectricGridModelDefault(scenario_name)
-    power_flow_solution = fledge.electric_grid_models.PowerFlowSolutionFixedPoint(electric_grid_model)
-    linear_electric_grid_model = (
-        fledge.electric_grid_models.LinearElectricGridModelGlobal(
-            electric_grid_model,
-            power_flow_solution
-        )
-    )
-    thermal_grid_model = fledge.thermal_grid_models.ThermalGridModel(scenario_name)
-    thermal_power_flow_solution = fledge.thermal_grid_models.ThermalPowerFlowSolution(thermal_grid_model)
-    linear_thermal_grid_model = (
-        fledge.thermal_grid_models.LinearThermalGridModel(
-            thermal_grid_model,
-            thermal_power_flow_solution
-        )
-    )
+
+    # Flexible loads.
     der_model_set = fledge.der_models.DERModelSet(scenario_name)
 
-    node_head_vector_minimum = 1.5 * thermal_power_flow_solution.node_head_vector
-    branch_flow_vector_maximum = 10.0 * thermal_power_flow_solution.branch_flow_vector
+    # Thermal grid.
+    thermal_grid_model = fledge.thermal_grid_models.ThermalGridModel(scenario_name)
+    thermal_grid_model.cooling_plant_efficiency = 10.0  # Change model parameter to incentivize use of thermal grid.
+    thermal_power_flow_solution_reference = fledge.thermal_grid_models.ThermalPowerFlowSolution(thermal_grid_model)
+    linear_thermal_grid_model = (
+        fledge.thermal_grid_models.LinearThermalGridModel(thermal_grid_model, thermal_power_flow_solution_reference)
+    )
+    # Define arbitrary operation limits.
+    node_head_vector_minimum = 1.5 * thermal_power_flow_solution_reference.node_head_vector
+    branch_flow_vector_maximum = 10.0 * thermal_power_flow_solution_reference.branch_flow_vector
+
+    # Electric grid.
+    electric_grid_model = fledge.electric_grid_models.ElectricGridModelDefault(scenario_name)
+    power_flow_solution_reference = fledge.electric_grid_models.PowerFlowSolutionFixedPoint(electric_grid_model)
+    linear_electric_grid_model = (
+        fledge.electric_grid_models.LinearElectricGridModelGlobal(electric_grid_model, power_flow_solution_reference)
+    )
+    # Define arbitrary operation limits.
     node_voltage_magnitude_vector_minimum = 0.5 * np.abs(electric_grid_model.node_voltage_vector_reference)
     node_voltage_magnitude_vector_maximum = 1.5 * np.abs(electric_grid_model.node_voltage_vector_reference)
     branch_power_magnitude_vector_maximum = 10.0 * electric_grid_model.branch_power_vector_magnitude_reference
 
-    # Define shorthands.
+    # Energy price.
+    price_data = fledge.data_interface.PriceData(scenario_name)
+
+    # Obtain time step index shorthands.
+    scenario_data = fledge.data_interface.ScenarioData(scenario_name)
     timesteps = scenario_data.timesteps
     timestep_interval_hours = (timesteps[1] - timesteps[0]) / pd.Timedelta('1h')
+
+    # Apply base power / voltage scaling.
+    base_power = 1e6
+    base_voltage = 22e3
+
+    # Flexible loads.
+    for der_model in der_model_set.flexible_der_models.values():
+        der_model.mapping_active_power_by_output *= 1 / base_power
+        der_model.mapping_reactive_power_by_output *= 1 / base_power
+        der_model.mapping_thermal_power_by_output *= 1 / base_power
+
+    # Thermal grid.
+    linear_thermal_grid_model.sensitivity_node_head_by_der_power *= base_power
+    linear_thermal_grid_model.sensitivity_branch_flow_by_der_power *= base_power
+    linear_thermal_grid_model.sensitivity_pump_power_by_der_power *= 1
+
+    # Electric grid.
+    linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_active *= base_power / base_voltage
+    linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_reactive *= base_power / base_voltage
+    linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_active *= 1
+    linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_reactive *= 1
+    linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_active *= 1
+    linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_reactive *= 1
+    linear_electric_grid_model.sensitivity_loss_active_by_der_power_active *= 1
+    linear_electric_grid_model.sensitivity_loss_active_by_der_power_reactive *= 1
+    linear_electric_grid_model.sensitivity_loss_reactive_by_der_power_active *= 1
+    linear_electric_grid_model.sensitivity_loss_reactive_by_der_power_reactive *= 1
+    linear_electric_grid_model.power_flow_solution.der_power_vector *= 1 / base_power
+    linear_electric_grid_model.power_flow_solution.branch_power_vector_1 *= 1 / base_power
+    linear_electric_grid_model.power_flow_solution.branch_power_vector_2 *= 1 / base_power
+    linear_electric_grid_model.power_flow_solution.loss *= 1 / base_power
+    linear_electric_grid_model.power_flow_solution.node_voltage_vector *= 1 / base_voltage
+
+    # Limits
+    node_voltage_magnitude_vector_minimum /= base_voltage
+    node_voltage_magnitude_vector_maximum /= base_voltage
+    branch_power_magnitude_vector_maximum /= base_power
+
+    # Energy price.
+    # - Price values are in S$/kWh.
+    price_data.price_timeseries *= base_power * timestep_interval_hours / 1e3
 
     # STEP 1.1: SOLVE PRIMAL PROBLEM.
     if run_primal or run_kkt:  # Primal constraints are also needed for KKT problem.
@@ -226,8 +273,8 @@ def main():
             thermal_grid_model.cooling_plant_efficiency ** -1
             * (
                 primal_problem.source_thermal_power
-                + cp.sum(-1.0 * (
-                    primal_problem.der_active_power_vector
+                + cp.sum((
+                    primal_problem.der_thermal_power_vector
                 ), axis=1, keepdims=True)  # Sum along DERs, i.e. sum for each timestep.
             )
             ==
@@ -350,7 +397,7 @@ def main():
         # Power balance.
         primal_problem.constraints.append(
             primal_problem.source_active_power
-            + cp.sum(-1.0 * (
+            + cp.sum((
                 primal_problem.der_active_power_vector
             ), axis=1, keepdims=True)  # Sum along DERs, i.e. sum for each timestep.
             ==
@@ -394,13 +441,11 @@ def main():
         # Define objective.
         primal_problem.objective += (
             price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-            * timestep_interval_hours  # In Wh.
             @ primal_problem.source_thermal_power
             * thermal_grid_model.cooling_plant_efficiency ** -1
         )
         primal_problem.objective += (
             price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-            * timestep_interval_hours  # In Wh.
             @ primal_problem.source_active_power
         )
 
@@ -747,7 +792,6 @@ def main():
             (
                 -1.0  # Load is negative power by convention, hence price must be inverted.
                 * np.transpose([price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values])
-                * timestep_interval_hours  # In Wh.
                 + dual_problem.lambda_pump_power_equation
                 * thermal_grid_model.cooling_plant_efficiency ** -1
             )
@@ -760,7 +804,6 @@ def main():
             (
                 -1.0  # Load is negative power by convention, hence price must be inverted.
                 * np.transpose([price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values])
-                * timestep_interval_hours  # In Wh.
                 + dual_problem.lambda_loss_active_equation
             )
         )
@@ -772,7 +815,6 @@ def main():
             (
                 # -1.0  # Load is negative power by convention, hence price must be inverted.
                 # * np.transpose([price_data.price_timeseries.loc[:, ('reactive_power', 'source', 'source')].values])
-                # * timestep_interval_hours  # In Wh.
                 dual_problem.lambda_loss_reactive_equation
             )
         )
