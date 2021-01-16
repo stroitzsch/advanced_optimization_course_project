@@ -30,7 +30,7 @@ def main():
     # STEP 1.0: SETUP MODELS.
 
     # Read scenario definition into FLEDGE.
-    # fledge.data_interface.recreate_database()
+    fledge.data_interface.recreate_database()
 
     # Obtain data & models.
 
@@ -1729,6 +1729,52 @@ def main():
     price_data.price_timeseries.loc[
         :, [('active_power', 'source', 'source')]
     ].to_csv(os.path.join(results_path, 'price_timeseries.csv'))
+
+    # Plot selected results.
+    if run_primal and run_dual and run_kkt:
+
+        timestep_plot = timesteps[12]  # 12pm.
+
+        # Selected primal variable.
+        figure = go.Figure()
+        figure.add_bar(
+            x=der_model_set.der_names,
+            y=primal_der_thermal_power_vector.loc[timestep_plot, :].abs(),
+            name="Primal"
+        )
+        figure.add_bar(
+            x=der_model_set.der_names,
+            y=kkt_der_thermal_power_vector.loc[timestep_plot, :].abs(),
+            name="KKT"
+        )
+        figure.update_layout(
+            xaxis_title="Flexible load index",
+            yaxis_title=f"Thermal cooling load [MW]",
+            legend=go.layout.Legend(x=0.01, xanchor='auto', y=0.99, yanchor='auto'),
+            margin=go.layout.Margin(b=40, r=30, t=10)
+        )
+        fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'step_1_der_thermal_power_vector'))
+
+        # Selected dual variable.
+        figure = go.Figure()
+        figure.add_bar(
+            x=der_model_set.der_names,
+            y=dual_lambda_thermal_power_equation.loc[timestep_plot, :].abs(),
+            name="Dual"
+        )
+        figure.add_bar(
+            x=der_model_set.der_names,
+            y=kkt_lambda_thermal_power_equation.loc[timestep_plot, :].abs(),
+            name="KKT"
+        )
+        figure.update_layout(
+            xaxis_title="Flexible load index",
+            yaxis_title=f"Thermal power price [S$/MWh]",
+            yaxis_range=[8.3, 8.5],
+            legend=go.layout.Legend(x=0.01, xanchor='auto', y=0.99, yanchor='auto'),
+            margin=go.layout.Margin(b=40, r=30, t=10)
+        )
+        fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'step_1_lambda_thermal_power_equation'))
 
     # Print results path.
     fledge.utils.launch(results_path)
