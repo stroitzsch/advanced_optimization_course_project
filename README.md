@@ -8,7 +8,7 @@
     - [Anaconda](https://www.anaconda.com/distribution/) Python 3.6 environment
     - [Gurobi Optimizer](http://www.gurobi.com/) (tested with version 9.1.0)
 2. In Anaconda Prompt, from this directory, run:
-    1. `conda install -c conda-forge cvxpy numpy pandas tslearn`
+    1. `conda install -c conda-forge cvxpy numpy pandas tslearn scikit-learn==0.23`
     2. `pip install -v -e fledge`
 
 ## Contents
