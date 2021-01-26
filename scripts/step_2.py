@@ -1020,11 +1020,13 @@ def main():
             x=irradiation_out_of_sample.index,
             y=irradiation_out_of_sample.loc[:, column].values,
             name=column,
+            line=go.scatter.Line(shape='hv'),
             opacity=0.5
         )
     figure.update_layout(
         yaxis_title="Irradiation [p.u.]",
         showlegend=False,
+        xaxis_range=[6, 22],
         yaxis_range=[-0.01, 1],
         margin=go.layout.Margin(b=50, r=30, t=10)
     )
@@ -1038,11 +1040,13 @@ def main():
             x=irradiation_in_sample.index,
             y=irradiation_in_sample.loc[:, column].values,
             name=column,
+            line=go.scatter.Line(shape='hv'),
             opacity=0.75
         )
     figure.update_layout(
         yaxis_title="Irradiation [p.u.]",
         showlegend=False,
+        xaxis_range=[6, 22],
         yaxis_range=[-0.01, 1],
         margin=go.layout.Margin(b=50, r=30, t=10)
     )
@@ -1051,6 +1055,7 @@ def main():
 
     # Plot objective histogram.
     figure = go.Figure()
+    nbinsx = 20
     if scenarios_probability_weighted:
         figure.add_histogram(
             x=(
@@ -1058,20 +1063,20 @@ def main():
                 + in_sample_objective_day_ahead.values[0]
             ),
             histnorm='probability',
-            nbinsx=15,
+            nbinsx=nbinsx,
             name=f'in-sample ({scenario_in_sample_number} scenarios)'
         )
     else:
         figure.add_histogram(
             x=in_sample_objective_real_time.values + in_sample_objective_day_ahead.values[0],
             histnorm='probability',
-            nbinsx=15,
+            nbinsx=nbinsx,
             name=f'in-sample ({scenario_in_sample_number} scenarios)'
         )
     figure.add_histogram(
         x=out_of_sample_objective_real_time.values + out_of_sample_objective_day_ahead.values[0],
         histnorm='probability',
-        nbinsx=15,
+        nbinsx=nbinsx,
         name='out-of-sample'
     )
     figure.update_layout(
@@ -1084,6 +1089,55 @@ def main():
     # figure.update_traces(opacity=0.75)
     # figure.show()
     fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'objective_value_distribution'))
+
+    # Plot active power.
+    figure = go.Figure()
+    figure.add_scatter(
+        x=irradiation_in_sample.index,
+        y=in_sample_source_active_power_day_ahead.abs().values[:, 0],
+        name='Day-ahead',
+        line=go.scatter.Line(shape='hv'),
+        fill='tozeroy'
+    )
+    for column in in_sample_source_active_power_real_time.columns:
+        figure.add_scatter(
+            x=irradiation_in_sample.index,
+            y=in_sample_source_active_power_real_time.loc[:, column].abs().values,
+            name='Real-time',
+            line=go.scatter.Line(shape='hv', color='black'),
+            opacity=0.5,
+            showlegend=True if column == in_sample_source_active_power_real_time.columns[0] else False
+        )
+    figure.update_layout(
+        yaxis_title="Source active power [MW]",
+        legend=go.layout.Legend(x=0.99, xanchor='auto', y=0.99, yanchor='auto'),
+        margin=go.layout.Margin(b=50, r=30, t=10)
+    )
+    # figure.show()
+    fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'in_sample_source_active_power'))
+
+    # Plot price time series.
+    figure = go.Figure()
+    figure.add_scatter(
+        x=irradiation_in_sample.index,
+        y=price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].abs().values,
+        name='Day-ahead',
+        line=go.scatter.Line(shape='hv')
+    )
+    figure.add_scatter(
+        x=irradiation_in_sample.index,
+        y=price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].abs().values,
+        name='Real-time',
+        line=go.scatter.Line(shape='hv')
+    )
+    figure.update_layout(
+        yaxis_title="Active power price [S$/MWh]",
+        yaxis_range=[0.0, price_data_real_time.price_timeseries.abs().max().max() + 0.1],
+        legend=go.layout.Legend(x=0.99, xanchor='auto', y=0.1, yanchor='auto'),
+        margin=go.layout.Margin(b=50, r=30, t=10)
+    )
+    # figure.show()
+    fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'price_timeseries'))
 
     # Print results path.
     fledge.utils.launch(results_path)
