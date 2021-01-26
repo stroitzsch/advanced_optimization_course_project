@@ -263,7 +263,7 @@ def main():
         in_sample_problem.source_active_power_real_time[scenario] = cp.Variable((len(timesteps), 1), nonpos=True)
 
     # Source variables: Day ahead.
-    in_sample_problem.source_thermal_power_day_ahead = cp.Variable((len(timesteps), 1), nonpos=True)
+    # in_sample_problem.source_thermal_power_day_ahead = cp.Variable((len(timesteps), 1), nonpos=True)
     in_sample_problem.source_active_power_day_ahead = cp.Variable((len(timesteps), 1), nonpos=True)
 
     # Define constraints.
@@ -390,8 +390,8 @@ def main():
         in_sample_problem.constraints.append(
             thermal_grid_model.cooling_plant_efficiency ** -1
             * (
-                in_sample_problem.source_thermal_power_day_ahead
-                + in_sample_problem.source_thermal_power_real_time[scenario]
+                # in_sample_problem.source_thermal_power_day_ahead
+                in_sample_problem.source_thermal_power_real_time[scenario]
                 + cp.sum(-1.0 * (
                     in_sample_problem.der_thermal_power_vector[scenario]
                 ), axis=1, keepdims=True)  # Sum along DERs, i.e. sum for each timestep.
@@ -484,6 +484,10 @@ def main():
             + cp.sum(-1.0 * (
                 in_sample_problem.der_active_power_vector[scenario]
             ), axis=1, keepdims=True)  # Sum along DERs, i.e. sum for each timestep.
+            - (
+                in_sample_problem.source_thermal_power_real_time[scenario]
+                * thermal_grid_model.cooling_plant_efficiency ** -1
+            )
             ==
             np.real(linear_electric_grid_model.power_flow_solution.loss)
             + cp.transpose(
@@ -510,11 +514,12 @@ def main():
     in_sample_problem.constraints.append(
         in_sample_problem.objective_day_ahead
         ==
+        # (
+        #     price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+        #     @ in_sample_problem.source_thermal_power_day_ahead
+        #     * thermal_grid_model.cooling_plant_efficiency ** -1
+        # )
         (
-            price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-            @ in_sample_problem.source_thermal_power_day_ahead
-            * thermal_grid_model.cooling_plant_efficiency ** -1
-        ) + (
             price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
             @ in_sample_problem.source_active_power_day_ahead
         )
@@ -526,11 +531,12 @@ def main():
         in_sample_problem.constraints.append(
             in_sample_problem.objective_real_time[scenario_index]
             ==
+            # (
+            #     price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+            #     @ in_sample_problem.source_thermal_power_real_time[scenario]
+            #     * thermal_grid_model.cooling_plant_efficiency ** -1
+            # )
             (
-                price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-                @ in_sample_problem.source_thermal_power_real_time[scenario]
-                * thermal_grid_model.cooling_plant_efficiency ** -1
-            ) + (
                 price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
                 @ in_sample_problem.source_active_power_real_time[scenario]
             )
@@ -558,9 +564,9 @@ def main():
     in_sample_objective_real_time = (
         pd.Series(in_sample_problem.objective_real_time.value, index=in_sample_scenarios)
     )
-    in_sample_source_thermal_power_day_ahead = (
-        pd.DataFrame(in_sample_problem.source_thermal_power_day_ahead.value, index=timesteps, columns=['total'])
-    )
+    # in_sample_source_thermal_power_day_ahead = (
+    #     pd.DataFrame(in_sample_problem.source_thermal_power_day_ahead.value, index=timesteps, columns=['total'])
+    # )
     in_sample_source_active_power_day_ahead = (
         pd.DataFrame(in_sample_problem.source_active_power_day_ahead.value, index=timesteps, columns=['total'])
     )
@@ -577,7 +583,7 @@ def main():
     # Store results.
     in_sample_objective_day_ahead.to_csv(os.path.join(results_path, 'in_sample_objective_day_ahead.csv'))
     in_sample_objective_real_time.to_csv(os.path.join(results_path, 'in_sample_objective_real_time.csv'))
-    in_sample_source_thermal_power_day_ahead.to_csv(os.path.join(results_path, 'in_sample_source_thermal_power_day_ahead.csv'))
+    # in_sample_source_thermal_power_day_ahead.to_csv(os.path.join(results_path, 'in_sample_source_thermal_power_day_ahead.csv'))
     in_sample_source_active_power_day_ahead.to_csv(os.path.join(results_path, 'in_sample_source_active_power_day_ahead.csv'))
     in_sample_source_thermal_power_real_time.to_csv(os.path.join(results_path, 'in_sample_source_thermal_power_real_time.csv'))
     in_sample_source_active_power_real_time.to_csv(os.path.join(results_path, 'in_sample_source_active_power_real_time.csv'))
@@ -658,9 +664,9 @@ def main():
 
     # Source variables: Day ahead.
     # - For the out-of-sample, this is a fixed parameter based on the solution of the in-sample problem.
-    out_of_sample_problem.source_thermal_power_day_ahead = (
-        cp.Parameter((len(timesteps), 1), value=in_sample_problem.source_thermal_power_day_ahead.value)
-    )
+    # out_of_sample_problem.source_thermal_power_day_ahead = (
+    #     cp.Parameter((len(timesteps), 1), value=in_sample_problem.source_thermal_power_day_ahead.value)
+    # )
     out_of_sample_problem.source_active_power_day_ahead = (
         cp.Parameter((len(timesteps), 1), value=in_sample_problem.source_active_power_day_ahead.value)
     )
@@ -789,8 +795,8 @@ def main():
         out_of_sample_problem.constraints.append(
             thermal_grid_model.cooling_plant_efficiency ** -1
             * (
-                out_of_sample_problem.source_thermal_power_day_ahead
-                + out_of_sample_problem.source_thermal_power_real_time[scenario]
+                # out_of_sample_problem.source_thermal_power_day_ahead
+                out_of_sample_problem.source_thermal_power_real_time[scenario]
                 + cp.sum(-1.0 * (
                     out_of_sample_problem.der_thermal_power_vector[scenario]
                 ), axis=1, keepdims=True)  # Sum along DERs, i.e. sum for each timestep.
@@ -883,6 +889,10 @@ def main():
             + cp.sum(-1.0 * (
                 out_of_sample_problem.der_active_power_vector[scenario]
             ), axis=1, keepdims=True)  # Sum along DERs, i.e. sum for each timestep.
+            - (
+                out_of_sample_problem.source_thermal_power_real_time[scenario]
+                * thermal_grid_model.cooling_plant_efficiency ** -1
+            )
             ==
             np.real(linear_electric_grid_model.power_flow_solution.loss)
             + cp.transpose(
@@ -909,11 +919,12 @@ def main():
     out_of_sample_problem.constraints.append(
         out_of_sample_problem.objective_day_ahead
         ==
+        # (
+        #     price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+        #     @ out_of_sample_problem.source_thermal_power_day_ahead
+        #     * thermal_grid_model.cooling_plant_efficiency ** -1
+        # )
         (
-            price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-            @ out_of_sample_problem.source_thermal_power_day_ahead
-            * thermal_grid_model.cooling_plant_efficiency ** -1
-        ) + (
             price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
             @ out_of_sample_problem.source_active_power_day_ahead
         )
@@ -926,11 +937,12 @@ def main():
         out_of_sample_problem.constraints.append(
             out_of_sample_problem.objective_real_time[scenario_index]
             ==
+            # (
+            #     price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+            #     @ out_of_sample_problem.source_thermal_power_real_time[scenario]
+            #     * thermal_grid_model.cooling_plant_efficiency ** -1
+            # )
             (
-                price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-                @ out_of_sample_problem.source_thermal_power_real_time[scenario]
-                * thermal_grid_model.cooling_plant_efficiency ** -1
-            ) + (
                 price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
                 @ out_of_sample_problem.source_active_power_real_time[scenario]
             )
@@ -953,9 +965,9 @@ def main():
     out_of_sample_objective_real_time = (
         pd.Series(out_of_sample_problem.objective_real_time.value, index=out_of_sample_scenarios)
     )
-    out_of_sample_source_thermal_power_day_ahead = (
-        pd.DataFrame(out_of_sample_problem.source_thermal_power_day_ahead.value, index=timesteps, columns=['total'])
-    )
+    # out_of_sample_source_thermal_power_day_ahead = (
+    #     pd.DataFrame(out_of_sample_problem.source_thermal_power_day_ahead.value, index=timesteps, columns=['total'])
+    # )
     out_of_sample_source_active_power_day_ahead = (
         pd.DataFrame(out_of_sample_problem.source_active_power_day_ahead.value, index=timesteps, columns=['total'])
     )
@@ -972,7 +984,7 @@ def main():
     # Store results.
     out_of_sample_objective_day_ahead.to_csv(os.path.join(results_path, 'out_of_sample_objective_day_ahead.csv'))
     out_of_sample_objective_real_time.to_csv(os.path.join(results_path, 'out_of_sample_objective_real_time.csv'))
-    out_of_sample_source_thermal_power_day_ahead.to_csv(os.path.join(results_path, 'out_of_sample_source_thermal_power_day_ahead.csv'))
+    # out_of_sample_source_thermal_power_day_ahead.to_csv(os.path.join(results_path, 'out_of_sample_source_thermal_power_day_ahead.csv'))
     out_of_sample_source_active_power_day_ahead.to_csv(os.path.join(results_path, 'out_of_sample_source_active_power_day_ahead.csv'))
     out_of_sample_source_thermal_power_real_time.to_csv(os.path.join(results_path, 'out_of_sample_source_thermal_power_real_time.csv'))
     out_of_sample_source_active_power_real_time.to_csv(os.path.join(results_path, 'out_of_sample_source_active_power_real_time.csv'))
