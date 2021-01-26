@@ -1,0 +1,8 @@
+parameter_set,parameter_name,parameter_value
+step_2_parameters,cooling_plant_in_service,0
+step_2_parameters,pv_plant_in_service,1
+step_2_parameters,cooling_plant_active_power,0.0
+step_2_parameters,cooling_plant_reactive_power,0.0
+step_2_parameters,cooling_plant_thermal_power,0.0
+step_2_parameters,pv_plant_active_power,+100000000.0
+step_2_parameters,pv_plant_reactive_power,+50000000.0
