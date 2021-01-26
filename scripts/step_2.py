@@ -18,7 +18,9 @@ def main():
     # Settings.
     scenario_name = 'course_project_step_2'
     results_path = os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'results', 'step_2')
+    # Note that the same number of in-sample scenarios may yield different results, due to the clustering algorithm.
     scenario_in_sample_number = 10
+    scenarios_probability_weighted = True
 
     # Clear / instantiate results directory.
     try:
@@ -533,10 +535,16 @@ def main():
                 @ in_sample_problem.source_active_power_real_time[scenario]
             )
         )
-        in_sample_problem.objective += (
-            len(in_sample_scenarios) ** -1  # Assuming equal probability.
-            * cp.sum(in_sample_problem.objective_real_time[scenario_index])
-        )
+        if scenarios_probability_weighted:
+            in_sample_problem.objective += (
+                (np.sum(irradiation_in_sample_mapping == scenario) / len(irradiation_in_sample_mapping))
+                * cp.sum(in_sample_problem.objective_real_time[scenario_index])
+            )
+        else:
+            in_sample_problem.objective += (
+                len(in_sample_scenarios) ** -1  # Assuming equal probability.
+                * cp.sum(in_sample_problem.objective_real_time[scenario_index])
+            )
 
     # Solve problem.
     fledge.utils.log_time('in-sample solution')
@@ -1007,16 +1015,23 @@ def main():
 
     # Plot objective histogram.
     figure = go.Figure()
-    figure.add_histogram(
-        x=in_sample_objective_real_time.values + in_sample_objective_day_ahead.values[0],
-        # x=(
-        #     in_sample_objective_real_time.reindex(irradiation_in_sample_mapping).values
-        #     + in_sample_objective_day_ahead.values[0]
-        # ),
-        histnorm='probability',
-        nbinsx=15,
-        name=f'in-sample ({scenario_in_sample_number} scenarios)'
-    )
+    if scenarios_probability_weighted:
+        figure.add_histogram(
+            x=(
+                in_sample_objective_real_time.reindex(irradiation_in_sample_mapping).values
+                + in_sample_objective_day_ahead.values[0]
+            ),
+            histnorm='probability',
+            nbinsx=15,
+            name=f'in-sample ({scenario_in_sample_number} scenarios)'
+        )
+    else:
+        figure.add_histogram(
+            x=in_sample_objective_real_time.values + in_sample_objective_day_ahead.values[0],
+            histnorm='probability',
+            nbinsx=15,
+            name=f'in-sample ({scenario_in_sample_number} scenarios)'
+        )
     figure.add_histogram(
         x=out_of_sample_objective_real_time.values + out_of_sample_objective_day_ahead.values[0],
         histnorm='probability',
