@@ -13,7 +13,7 @@ import shutil
 def main():
 
     # Settings.
-    scenario_name = 'singapore_tanjongpagar_modified'
+    scenario_name = 'course_project_step_1'
     results_path = os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'results', 'step_1')
     run_primal = True
     run_dual = True
@@ -30,6 +30,10 @@ def main():
     # STEP 1.0: SETUP MODELS.
 
     # Read scenario definition into FLEDGE.
+    # - Data directory from this repository is first added as additional data path.
+    fledge.config.config['paths']['additional_data'].append(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'data')
+    )
     fledge.data_interface.recreate_database()
 
     # Obtain data & models.
