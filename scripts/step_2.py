@@ -583,9 +583,19 @@ def main():
     in_sample_source_active_power_real_time.to_csv(os.path.join(results_path, 'in_sample_source_active_power_real_time.csv'))
 
     # Print objective.
-    in_sample_objective = pd.Series(in_sample_problem.objective.value, index=['in_sample_objective'])
+    in_sample_objective = pd.Series()
+    in_sample_objective.loc['in_sample_objective'] = in_sample_problem.objective.value
+    in_sample_objective.loc['in_sample_objective_variance'] = (
+        np.var(
+            in_sample_objective_day_ahead.sum()
+            + in_sample_objective_real_time.values
+        )
+    )
+    in_sample_objective.loc['in_sample_objective_standard_deviation'] = (
+        in_sample_objective.at['in_sample_objective_variance'] ** 0.5
+    )
     in_sample_objective.to_csv(os.path.join(results_path, 'in_sample_objective.csv'))
-    print(f"in_sample_objective = {in_sample_objective.values}")
+    print(in_sample_objective)
 
     # STEP 2.2: OUT-OF-SAMPLE ANALYSIS.
 
@@ -968,14 +978,21 @@ def main():
     out_of_sample_source_active_power_real_time.to_csv(os.path.join(results_path, 'out_of_sample_source_active_power_real_time.csv'))
 
     # Print objective.
-    out_of_sample_objective = (
-        pd.Series((
+    out_of_sample_objective = pd.Series()
+    out_of_sample_objective.loc['out_of_sample_objective'] = (
+        out_of_sample_objective_day_ahead.sum()
+        + out_of_sample_objective_real_time.sum() / len(out_of_sample_scenarios)
+    )
+    out_of_sample_objective.loc['out_of_sample_objective_variance'] = (
+        np.var(
             out_of_sample_objective_day_ahead.sum()
-            + out_of_sample_objective_real_time.sum() / len(out_of_sample_scenarios)
-        ), index=['out_of_sample_objective'])
+            + out_of_sample_objective_real_time.values
+        )
+    )
+    out_of_sample_objective.loc['out_of_sample_objective_standard_deviation'] = (
+        out_of_sample_objective.at['out_of_sample_objective_variance'] ** 0.5
     )
     out_of_sample_objective.to_csv(os.path.join(results_path, 'out_of_sample_objective.csv'))
-    print(f"out_of_sample_objective = {out_of_sample_objective.values}")
 
     # Plot selected results.
 
