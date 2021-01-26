@@ -232,7 +232,7 @@ def main():
                 primal_problem.der_active_power_vector[:, [der_index]]
                 ==
                 cp.transpose(
-                    np.array([der_model.mapping_active_power_by_output.values])
+                    der_model.mapping_active_power_by_output.values
                     @ cp.transpose(primal_problem.output_vector[der_model.der_name])
                 )
             )
@@ -240,7 +240,7 @@ def main():
                 primal_problem.der_reactive_power_vector[:, [der_index]]
                 ==
                 cp.transpose(
-                    np.array([der_model.mapping_reactive_power_by_output.values])
+                    der_model.mapping_reactive_power_by_output.values
                     @ cp.transpose(primal_problem.output_vector[der_model.der_name])
                 )
             )
@@ -248,7 +248,7 @@ def main():
                 primal_problem.der_thermal_power_vector[:, [der_index]]
                 ==
                 cp.transpose(
-                    np.array([der_model.mapping_thermal_power_by_output.values])
+                    der_model.mapping_thermal_power_by_output.values
                     @ cp.transpose(primal_problem.output_vector[der_model.der_name])
                 )
             )
@@ -274,15 +274,6 @@ def main():
             <=
             np.array([branch_flow_vector_maximum.ravel()])
         )
-        # primal_problem.constraints.append(
-        #     - 1.0
-        #     * np.array([branch_flow_vector_maximum.ravel()])
-        #     <=
-        #     cp.transpose(
-        #         linear_thermal_grid_model.sensitivity_branch_flow_by_der_power
-        #         @ cp.transpose(primal_problem.der_thermal_power_vector)
-        #     )
-        # )
 
         # Power balance.
         primal_problem.constraints.append(
@@ -697,15 +688,15 @@ def main():
                     + dual_problem.mu_output_maximum[der_model.der_name]
                     - (
                         dual_problem.lambda_thermal_power_equation[:, [der_index]]
-                        @ np.array([der_model.mapping_thermal_power_by_output.values])
+                        @ der_model.mapping_thermal_power_by_output.values
                     )
                     - (
                         dual_problem.lambda_active_power_equation[:, [der_index]]
-                        @ np.array([der_model.mapping_active_power_by_output.values])
+                        @ der_model.mapping_active_power_by_output.values
                     )
                     - (
                         dual_problem.lambda_reactive_power_equation[:, [der_index]]
-                        @ np.array([der_model.mapping_reactive_power_by_output.values])
+                        @ der_model.mapping_reactive_power_by_output.values
                     )
                 )
             )
