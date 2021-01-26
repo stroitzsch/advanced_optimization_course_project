@@ -9,6 +9,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import shutil
+import time
 import tslearn.utils
 import tslearn.clustering
 
@@ -557,9 +558,9 @@ def main(
             )
 
     # Solve problem.
-    fledge.utils.log_time('in-sample solution')
+    in_sample_time = -1.0 * time.time()
     in_sample_problem.solve()
-    fledge.utils.log_time('in-sample solution')
+    in_sample_time += time.time()
 
     # Obtain results.
     in_sample_objective_day_ahead = (
@@ -604,6 +605,7 @@ def main(
     in_sample_objective.loc['in_sample_objective_standard_deviation'] = (
         in_sample_objective.at['in_sample_objective_variance'] ** 0.5
     )
+    in_sample_objective.loc['in_sample_time'] = in_sample_time
     in_sample_objective.to_csv(os.path.join(results_path, 'in_sample_objective.csv'))
     print(in_sample_objective)
 
@@ -958,9 +960,9 @@ def main(
         )
 
     # Solve problem.
-    fledge.utils.log_time('out-of-sample solution')
+    out_of_sample_time = -1.0 * time.time()
     out_of_sample_problem.solve()
-    fledge.utils.log_time('out-of-sample solution')
+    out_of_sample_time += time.time()
 
     # Obtain results.
     out_of_sample_objective_day_ahead = (
@@ -1008,6 +1010,7 @@ def main(
     out_of_sample_objective.loc['out_of_sample_objective_standard_deviation'] = (
         out_of_sample_objective.at['out_of_sample_objective_variance'] ** 0.5
     )
+    out_of_sample_objective.loc['out_of_sample_time'] = out_of_sample_time
     out_of_sample_objective.to_csv(os.path.join(results_path, 'out_of_sample_objective.csv'))
 
     # Plot selected results.
