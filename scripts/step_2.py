@@ -186,11 +186,11 @@ def main():
     # - Select representative scenarios by time series clustering.
     clustering = tslearn.clustering.TimeSeriesKMeans(n_clusters=scenario_in_sample_number)
     clustering = clustering.fit((tslearn.utils.to_time_series_dataset(irradiation_out_of_sample.transpose())))
-    # irradiation_cluster_prediction = (
-    #     pd.Index(
-    #         clustering.predict(tslearn.utils.to_time_series_dataset(irradiation_out_of_sample.transpose()))
-    #     )
-    # )
+    irradiation_in_sample_mapping = (
+        pd.Index(
+            clustering.predict(tslearn.utils.to_time_series_dataset(irradiation_out_of_sample.transpose()))
+        )
+    )
     irradiation_in_sample = (
         pd.DataFrame(
             clustering.cluster_centers_[:, :, 0].transpose(),
@@ -964,27 +964,75 @@ def main():
 
     # Plot selected results.
 
-    # Plot irradiation timeseries.
+    # Plot out-of-sample irradiation timeseries.
     figure = go.Figure()
+    # figure.add_histogram2dcontour(
+    #     x=irradiation_timeseries.loc[:, 'time_string'].values,
+    #     y=irradiation_timeseries.loc[:, 'irradiation_horizontal'].values,
+    #     colorscale='Blues'
+    # )
     for column in irradiation_out_of_sample.columns:
         figure.add_scatter(
             x=irradiation_out_of_sample.index,
             y=irradiation_out_of_sample.loc[:, column].values,
-            name=column
+            name=column,
+            opacity=0.5
         )
+    figure.update_layout(
+        yaxis_title="Irradiation [p.u.]",
+        showlegend=False,
+        yaxis_range=[-0.01, 1],
+        margin=go.layout.Margin(b=50, r=30, t=10)
+    )
     # figure.show()
     fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'irradiation_out_of_sample'))
 
-    # Plot irradiation timeseries clusters.
+    # Plot in-sample irradiation timeseries.
     figure = go.Figure()
     for column in irradiation_in_sample.columns:
         figure.add_scatter(
             x=irradiation_in_sample.index,
             y=irradiation_in_sample.loc[:, column].values,
-            name=column
+            name=column,
+            opacity=0.75
         )
+    figure.update_layout(
+        yaxis_title="Irradiation [p.u.]",
+        showlegend=False,
+        yaxis_range=[-0.01, 1],
+        margin=go.layout.Margin(b=50, r=30, t=10)
+    )
     # figure.show()
     fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'irradiation_in_sample'))
+
+    # Plot objective histogram.
+    figure = go.Figure()
+    figure.add_histogram(
+        x=in_sample_objective_real_time.values + in_sample_objective_day_ahead.values[0],
+        # x=(
+        #     in_sample_objective_real_time.reindex(irradiation_in_sample_mapping).values
+        #     + in_sample_objective_day_ahead.values[0]
+        # ),
+        histnorm='probability',
+        nbinsx=15,
+        name=f'in-sample ({scenario_in_sample_number} scenarios)'
+    )
+    figure.add_histogram(
+        x=out_of_sample_objective_real_time.values + out_of_sample_objective_day_ahead.values[0],
+        histnorm='probability',
+        nbinsx=15,
+        name='out-of-sample'
+    )
+    figure.update_layout(
+        xaxis_title="Objective value [SGD]",
+        yaxis_title="Probability",
+        legend=go.layout.Legend(x=0.99, xanchor='auto', y=0.99, yanchor='auto'),
+        margin=go.layout.Margin(b=40, r=30, t=10),
+        # barmode='overlay'
+    )
+    # figure.update_traces(opacity=0.75)
+    # figure.show()
+    fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'objective_value_distribution'))
 
     # Print results path.
     fledge.utils.launch(results_path)
