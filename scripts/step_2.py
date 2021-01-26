@@ -13,14 +13,18 @@ import tslearn.utils
 import tslearn.clustering
 
 
-def main():
+def main(
+    scenario_in_sample_number=None,
+    scenarios_probability_weighted=None
+):
 
     # Settings.
     scenario_name = 'course_project_step_2'
     results_path = os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'results', 'step_2')
     # Note that the same number of in-sample scenarios may yield different results, due to the clustering algorithm.
-    scenario_in_sample_number = 10
-    scenarios_probability_weighted = True
+    scenario_in_sample_number = 10 if scenario_in_sample_number is None else scenario_in_sample_number
+    scenarios_probability_weighted = True if scenarios_probability_weighted is None else scenarios_probability_weighted
+    results_path += f'_{scenario_in_sample_number}_weighted{scenarios_probability_weighted}'
 
     # Clear / instantiate results directory.
     try:
@@ -1145,4 +1149,15 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+
+    # Loop settings.
+    run_all = True
+    scenario_in_sample_number_set = [10, 20, 30]
+    scenarios_probability_weighted_set = [True, False]
+
+    if run_all:
+        for scenario_in_sample_number in scenario_in_sample_number_set:
+            for scenarios_probability_weighted in scenarios_probability_weighted_set:
+                main(scenario_in_sample_number, scenarios_probability_weighted)
+    else:
+        main()
