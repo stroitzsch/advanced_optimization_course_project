@@ -17,7 +17,7 @@ def main():
 
     # Settings.
     scenario_name = 'course_project_step_2'
-    results_path = os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'results', 'step_1')
+    results_path = os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'results', 'step_2')
     scenario_in_sample_number = 10
 
     # Clear / instantiate results directory.
@@ -526,9 +526,9 @@ def main():
         )
 
     # Solve problem.
-    fledge.utils.log_time('in sample solution')
+    fledge.utils.log_time('in-sample solution')
     in_sample_problem.solve()
-    fledge.utils.log_time('in sample solution')
+    fledge.utils.log_time('in-sample solution')
 
     # Print objective.
     in_sample_objective = pd.Series(in_sample_problem.objective.value, index=['in_sample_objective'])
@@ -865,9 +865,9 @@ def main():
         )
 
     # Solve problem.
-    fledge.utils.log_time('in sample solution')
+    fledge.utils.log_time('out-of-sample solution')
     out_of_sample_problem.solve()
-    fledge.utils.log_time('in sample solution')
+    fledge.utils.log_time('out-of-sample solution')
 
     # Print objective.
     out_of_sample_objective = pd.Series(out_of_sample_problem.objective.value, index=['out_of_sample_objective'])
