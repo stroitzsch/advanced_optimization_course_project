@@ -500,35 +500,79 @@ def main():
 
     # Define objective.
 
+    # Define variables for the objective components for convenience.
+    in_sample_problem.objective_day_ahead = cp.Variable((1,))
+    in_sample_problem.objective_real_time = cp.Variable((len(in_sample_scenarios,)))
+
     # Day-ahead.
-    in_sample_problem.objective += (
-        price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-        @ in_sample_problem.source_thermal_power_day_ahead
-        * thermal_grid_model.cooling_plant_efficiency ** -1
+    in_sample_problem.constraints.append(
+        in_sample_problem.objective_day_ahead
+        ==
+        (
+            price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+            @ in_sample_problem.source_thermal_power_day_ahead
+            * thermal_grid_model.cooling_plant_efficiency ** -1
+        ) + (
+            price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+            @ in_sample_problem.source_active_power_day_ahead
+        )
     )
-    in_sample_problem.objective += (
-        price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-        @ in_sample_problem.source_active_power_day_ahead
-    )
+    in_sample_problem.objective += cp.sum(in_sample_problem.objective_day_ahead)
 
     # Real-time.
-    for scenario in in_sample_scenarios:
-        in_sample_problem.objective += (
-            len(in_sample_scenarios) ** -1  # Assuming equal probability.
-            * price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-            @ in_sample_problem.source_thermal_power_real_time[scenario]
-            * thermal_grid_model.cooling_plant_efficiency ** -1
+    for scenario_index, scenario in enumerate(in_sample_scenarios):
+        in_sample_problem.constraints.append(
+            in_sample_problem.objective_real_time[scenario_index]
+            ==
+            (
+                price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+                @ in_sample_problem.source_thermal_power_real_time[scenario]
+                * thermal_grid_model.cooling_plant_efficiency ** -1
+            ) + (
+                price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+                @ in_sample_problem.source_active_power_real_time[scenario]
+            )
         )
         in_sample_problem.objective += (
             len(in_sample_scenarios) ** -1  # Assuming equal probability.
-            * price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-            @ in_sample_problem.source_active_power_real_time[scenario]
+            * cp.sum(in_sample_problem.objective_real_time[scenario_index])
         )
 
     # Solve problem.
     fledge.utils.log_time('in-sample solution')
     in_sample_problem.solve()
     fledge.utils.log_time('in-sample solution')
+
+    # Obtain results.
+    in_sample_objective_day_ahead = (
+        pd.Series(in_sample_problem.objective_day_ahead.value, index=['total'])
+    )
+    in_sample_objective_real_time = (
+        pd.Series(in_sample_problem.objective_real_time.value, index=in_sample_scenarios)
+    )
+    in_sample_source_thermal_power_day_ahead = (
+        pd.DataFrame(in_sample_problem.source_thermal_power_day_ahead.value, index=timesteps, columns=['total'])
+    )
+    in_sample_source_active_power_day_ahead = (
+        pd.DataFrame(in_sample_problem.source_active_power_day_ahead.value, index=timesteps, columns=['total'])
+    )
+    in_sample_source_thermal_power_real_time = pd.DataFrame(0.0, index=timesteps, columns=in_sample_scenarios)
+    in_sample_source_active_power_real_time = pd.DataFrame(0.0, index=timesteps, columns=in_sample_scenarios)
+    for scenario in in_sample_scenarios:
+        in_sample_source_thermal_power_real_time.loc[:, scenario] = (
+            in_sample_problem.source_thermal_power_real_time[scenario].value
+        )
+        in_sample_source_active_power_real_time.loc[:, scenario] = (
+            in_sample_problem.source_active_power_real_time[scenario].value
+        )
+
+    # Store results.
+    in_sample_objective_day_ahead.to_csv(os.path.join(results_path, 'in_sample_objective_day_ahead.csv'))
+    in_sample_objective_real_time.to_csv(os.path.join(results_path, 'in_sample_objective_real_time.csv'))
+    in_sample_source_thermal_power_day_ahead.to_csv(os.path.join(results_path, 'in_sample_source_thermal_power_day_ahead.csv'))
+    in_sample_source_active_power_day_ahead.to_csv(os.path.join(results_path, 'in_sample_source_active_power_day_ahead.csv'))
+    in_sample_source_thermal_power_real_time.to_csv(os.path.join(results_path, 'in_sample_source_thermal_power_real_time.csv'))
+    in_sample_source_active_power_real_time.to_csv(os.path.join(results_path, 'in_sample_source_active_power_real_time.csv'))
 
     # Print objective.
     in_sample_objective = pd.Series(in_sample_problem.objective.value, index=['in_sample_objective'])
@@ -839,35 +883,79 @@ def main():
 
     # Define objective.
 
+    # Define variables for the objective components for convenience.
+    out_of_sample_problem.objective_day_ahead = cp.Variable((1,))
+    out_of_sample_problem.objective_real_time = cp.Variable((len(out_of_sample_scenarios,)))
+
     # Day-ahead.
-    out_of_sample_problem.objective += (
-        price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-        @ out_of_sample_problem.source_thermal_power_day_ahead
-        * thermal_grid_model.cooling_plant_efficiency ** -1
+    out_of_sample_problem.constraints.append(
+        out_of_sample_problem.objective_day_ahead
+        ==
+        (
+            price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+            @ out_of_sample_problem.source_thermal_power_day_ahead
+            * thermal_grid_model.cooling_plant_efficiency ** -1
+        ) + (
+            price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+            @ out_of_sample_problem.source_active_power_day_ahead
+        )
     )
-    out_of_sample_problem.objective += (
-        price_data_day_ahead.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-        @ out_of_sample_problem.source_active_power_day_ahead
-    )
+    out_of_sample_problem.objective += cp.sum(out_of_sample_problem.objective_day_ahead)
 
     # Real-time.
-    for scenario in out_of_sample_scenarios:
-        out_of_sample_problem.objective += (
-            len(out_of_sample_scenarios) ** -1  # Assuming equal probability.
-            * price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-            @ out_of_sample_problem.source_thermal_power_real_time[scenario]
-            * thermal_grid_model.cooling_plant_efficiency ** -1
+    for scenario_index, scenario in enumerate(out_of_sample_scenarios):
+        out_of_sample_problem.constraints.append(
+            out_of_sample_problem.objective_real_time[scenario_index]
+            ==
+            (
+                price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+                @ out_of_sample_problem.source_thermal_power_real_time[scenario]
+                * thermal_grid_model.cooling_plant_efficiency ** -1
+            ) + (
+                price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+                @ out_of_sample_problem.source_active_power_real_time[scenario]
+            )
         )
         out_of_sample_problem.objective += (
             len(out_of_sample_scenarios) ** -1  # Assuming equal probability.
-            * price_data_real_time.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
-            @ out_of_sample_problem.source_active_power_real_time[scenario]
+            * cp.sum(out_of_sample_problem.objective_real_time[scenario_index])
         )
 
     # Solve problem.
     fledge.utils.log_time('out-of-sample solution')
     out_of_sample_problem.solve()
     fledge.utils.log_time('out-of-sample solution')
+
+    # Obtain results.
+    out_of_sample_objective_day_ahead = (
+        pd.Series(out_of_sample_problem.objective_day_ahead.value, index=['total'])
+    )
+    out_of_sample_objective_real_time = (
+        pd.Series(out_of_sample_problem.objective_real_time.value, index=out_of_sample_scenarios)
+    )
+    out_of_sample_source_thermal_power_day_ahead = (
+        pd.DataFrame(out_of_sample_problem.source_thermal_power_day_ahead.value, index=timesteps, columns=['total'])
+    )
+    out_of_sample_source_active_power_day_ahead = (
+        pd.DataFrame(out_of_sample_problem.source_active_power_day_ahead.value, index=timesteps, columns=['total'])
+    )
+    out_of_sample_source_thermal_power_real_time = pd.DataFrame(0.0, index=timesteps, columns=out_of_sample_scenarios)
+    out_of_sample_source_active_power_real_time = pd.DataFrame(0.0, index=timesteps, columns=out_of_sample_scenarios)
+    for scenario in out_of_sample_scenarios:
+        out_of_sample_source_thermal_power_real_time.loc[:, scenario] = (
+            out_of_sample_problem.source_thermal_power_real_time[scenario].value
+        )
+        out_of_sample_source_active_power_real_time.loc[:, scenario] = (
+            out_of_sample_problem.source_active_power_real_time[scenario].value
+        )
+
+    # Store results.
+    out_of_sample_objective_day_ahead.to_csv(os.path.join(results_path, 'out_of_sample_objective_day_ahead.csv'))
+    out_of_sample_objective_real_time.to_csv(os.path.join(results_path, 'out_of_sample_objective_real_time.csv'))
+    out_of_sample_source_thermal_power_day_ahead.to_csv(os.path.join(results_path, 'out_of_sample_source_thermal_power_day_ahead.csv'))
+    out_of_sample_source_active_power_day_ahead.to_csv(os.path.join(results_path, 'out_of_sample_source_active_power_day_ahead.csv'))
+    out_of_sample_source_thermal_power_real_time.to_csv(os.path.join(results_path, 'out_of_sample_source_thermal_power_real_time.csv'))
+    out_of_sample_source_active_power_real_time.to_csv(os.path.join(results_path, 'out_of_sample_source_active_power_real_time.csv'))
 
     # Print objective.
     out_of_sample_objective = pd.Series(out_of_sample_problem.objective.value, index=['out_of_sample_objective'])
