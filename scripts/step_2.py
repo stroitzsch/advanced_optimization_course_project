@@ -908,7 +908,8 @@ def main():
             @ out_of_sample_problem.source_active_power_day_ahead
         )
     )
-    out_of_sample_problem.objective += cp.sum(out_of_sample_problem.objective_day_ahead)
+    # Not added to objective to avoid numerical issues.
+    # out_of_sample_problem.objective += cp.sum(out_of_sample_problem.objective_day_ahead)
 
     # Real-time.
     for scenario_index, scenario in enumerate(out_of_sample_scenarios):
@@ -925,8 +926,9 @@ def main():
             )
         )
         out_of_sample_problem.objective += (
-            len(out_of_sample_scenarios) ** -1  # Assuming equal probability.
-            * cp.sum(out_of_sample_problem.objective_real_time[scenario_index])
+            # Not probability-weighted to avoid numerical issues.
+            # len(out_of_sample_scenarios) ** -1  # Assuming equal probability.
+            cp.sum(out_of_sample_problem.objective_real_time[scenario_index])
         )
 
     # Solve problem.
@@ -966,7 +968,12 @@ def main():
     out_of_sample_source_active_power_real_time.to_csv(os.path.join(results_path, 'out_of_sample_source_active_power_real_time.csv'))
 
     # Print objective.
-    out_of_sample_objective = pd.Series(out_of_sample_problem.objective.value, index=['out_of_sample_objective'])
+    out_of_sample_objective = (
+        pd.Series((
+            out_of_sample_objective_day_ahead.sum()
+            + out_of_sample_objective_real_time.sum() / len(out_of_sample_scenarios)
+        ), index=['out_of_sample_objective'])
+    )
     out_of_sample_objective.to_csv(os.path.join(results_path, 'out_of_sample_objective.csv'))
     print(f"out_of_sample_objective = {out_of_sample_objective.values}")
 
