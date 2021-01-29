@@ -14,7 +14,9 @@
 ## Contents
 
 - [`step_1.pdf`](step_1.pdf): Report for Step 1: Solving the problem in a deterministic manner.
+- [`step_2.pdf`](step_2.pdf): Report for Step 2: Solving the problem under uncertainty.
 - [`scripts/step_1.py`](scripts/step_1.py): Run script for Step 1: Solving the problem in a deterministic manner.
+- [`scripts/step_2.py`](scripts/step_2.py): Run script for Step 2: Solving the problem under uncertainty.
 - [`results/`](results/): Results from the run scripts.
 
 ## Github
