@@ -23,7 +23,7 @@ def main(
     scenario_name = 'course_project_step_2'
     results_path = os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'results', 'step_2')
     # Note that the same number of in-sample scenarios may yield different results, due to the clustering algorithm.
-    scenario_in_sample_number = 10 if scenario_in_sample_number is None else scenario_in_sample_number
+    scenario_in_sample_number = 30 if scenario_in_sample_number is None else scenario_in_sample_number
     scenarios_probability_weighted = True if scenarios_probability_weighted is None else scenarios_probability_weighted
     results_path += f'_{scenario_in_sample_number}_weighted{scenarios_probability_weighted}'
 
@@ -36,13 +36,6 @@ def main(
         pass
 
     # STEP 2.0: SETUP MODELS.
-
-    # Read scenario definition into FLEDGE.
-    # - Data directory from this repository is first added as additional data path.
-    fledge.config.config['paths']['additional_data'].append(
-        os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'data')
-    )
-    fledge.data_interface.recreate_database()
 
     # Obtain data & models.
 
@@ -1109,7 +1102,10 @@ def main(
     for column in in_sample_source_active_power_real_time.columns:
         figure.add_scatter(
             x=irradiation_in_sample.index,
-            y=in_sample_source_active_power_real_time.loc[:, column].abs().values,
+            y=(
+                in_sample_source_active_power_day_ahead.abs().values[:, 0]
+                + in_sample_source_active_power_real_time.loc[:, column].abs().values
+            ),
             name='Real-time',
             line=go.scatter.Line(shape='hv', color='black'),
             opacity=0.5,
@@ -1157,6 +1153,13 @@ if __name__ == '__main__':
     run_all = True
     scenario_in_sample_number_set = [10, 20, 30]
     scenarios_probability_weighted_set = [True, False]
+
+    # Read scenario definition into FLEDGE.
+    # - Data directory from this repository is first added as additional data path.
+    fledge.config.config['paths']['additional_data'].append(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'data')
+    )
+    fledge.data_interface.recreate_database()
 
     if run_all:
         for scenario_in_sample_number in scenario_in_sample_number_set:
