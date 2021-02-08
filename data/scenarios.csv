@@ -1,3 +1,4 @@
 scenario_name,electric_grid_name,thermal_grid_name,parameter_set,price_type,electric_grid_operation_limit_type,thermal_grid_operation_limit_type,timestep_start,timestep_end,timestep_interval,base_apparent_power,base_voltage,base_thermal_power
 course_project_step_1,singapore_tanjongpagar_modified,singapore_tanjongpagar_modified,singapore_tanjongpagar_default,singapore_wholesale,testing_limits,testing_limits,2017-01-02T00:00:00,2017-01-03T00:00:00,01:00:00,1,1,1
 course_project_step_2,singapore_tanjongpagar_modified,singapore_tanjongpagar_modified,step_2_parameters,singapore_wholesale,testing_limits,testing_limits,2017-01-02T00:00:00,2017-01-03T00:00:00,01:00:00,1,1,1
+course_project_step_3,singapore_tanjongpagar_modified,singapore_tanjongpagar_modified,singapore_tanjongpagar_default,singapore_wholesale,testing_limits,testing_limits,2017-01-02T00:00:00,2017-01-03T00:00:00,01:00:00,1,1,1
