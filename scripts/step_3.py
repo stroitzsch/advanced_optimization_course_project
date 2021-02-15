@@ -436,6 +436,8 @@ def main():
         )
     )
 
+    # Define equality constraints.
+
     # Thermal power balance.
     problem.constraints.append(
         thermal_grid_model.cooling_plant_efficiency ** -1
@@ -495,7 +497,121 @@ def main():
             )
         )
     )
-    
+
+    # Define inequality constraints.
+
+    # Thermal grid.
+
+    # Node head limit.
+    problem.constraints.append(
+        np.array([node_head_vector_minimum.ravel()])
+        <=
+        cp.transpose(
+            linear_thermal_grid_model.sensitivity_node_head_by_der_power
+            @ cp.transpose(problem.der_thermal_power_vector)
+        )
+    )
+
+    # Branch flow limit.
+    problem.constraints.append(
+        cp.transpose(
+            linear_thermal_grid_model.sensitivity_branch_flow_by_der_power
+            @ cp.transpose(problem.der_thermal_power_vector)
+        )
+        <=
+        np.array([branch_flow_vector_maximum.ravel()])
+    )
+
+    # Power balance.
+    problem.constraints.append(
+        thermal_grid_model.cooling_plant_efficiency ** -1
+        * (
+            problem.source_thermal_power
+            + cp.sum(-1.0 * (
+                problem.der_thermal_power_vector
+            ), axis=1, keepdims=True)  # Sum along DERs, i.e. sum for each timestep.
+        )
+        ==
+        cp.transpose(
+            linear_thermal_grid_model.sensitivity_pump_power_by_der_power
+            @ cp.transpose(problem.der_thermal_power_vector)
+        )
+    )
+
+    # Electric grid.
+
+    # Voltage limits.
+    problem.constraints.append(
+        np.array([node_voltage_magnitude_vector_minimum.ravel()])
+        <=
+        np.array([np.abs(linear_electric_grid_model.power_flow_solution.node_voltage_vector.ravel())])
+        + cp.transpose(
+            linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_active
+            @ cp.transpose(
+                problem.der_active_power_vector
+                - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+            )
+            + linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_reactive
+            @ cp.transpose(
+                problem.der_reactive_power_vector
+                - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+            )
+        )
+    )
+    problem.constraints.append(
+        np.array([np.abs(linear_electric_grid_model.power_flow_solution.node_voltage_vector.ravel())])
+        + cp.transpose(
+            linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_active
+            @ cp.transpose(
+                problem.der_active_power_vector
+                - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+            )
+            + linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_reactive
+            @ cp.transpose(
+                problem.der_reactive_power_vector
+                - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+            )
+        )
+        <=
+        np.array([node_voltage_magnitude_vector_maximum.ravel()])
+    )
+
+    # Branch flow limits.
+    problem.constraints.append(
+        np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_1.ravel())])
+        + cp.transpose(
+            linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_active
+            @ cp.transpose(
+                problem.der_active_power_vector
+                - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+            )
+            + linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_reactive
+            @ cp.transpose(
+                problem.der_reactive_power_vector
+                - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+            )
+        )
+        <=
+        np.array([branch_power_magnitude_vector_maximum.ravel()])
+    )
+    problem.constraints.append(
+        np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_2.ravel())])
+        + cp.transpose(
+            linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_active
+            @ cp.transpose(
+                problem.der_active_power_vector
+                - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+            )
+            + linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_reactive
+            @ cp.transpose(
+                problem.der_reactive_power_vector
+                - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+            )
+        )
+        <=
+        np.array([branch_power_magnitude_vector_maximum.ravel()])
+    )
+
     # Define complementarity constraints.
 
     # Thermal grid.
