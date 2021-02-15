@@ -222,8 +222,6 @@ def main():
 
     # Define complementarity big M parameters.
     # - Big M values are chosen based on expected order of magnitude of constraints from primal / dual solution.
-    problem.big_m_output_minimum = cp.Parameter(value=2e4)
-    problem.big_m_output_maximum = cp.Parameter(value=2e4)
     problem.big_m_node_head_minium = cp.Parameter(value=1e2)
     problem.big_m_branch_flow_maximum = cp.Parameter(value=1e3)
     problem.big_m_node_voltage_magnitude_minimum = cp.Parameter(value=1e2)
@@ -231,7 +229,7 @@ def main():
     problem.big_m_branch_power_magnitude_maximum_1 = cp.Parameter(value=1e3)
     problem.big_m_branch_power_magnitude_maximum_2 = cp.Parameter(value=1e3)
 
-    # Define constraints.
+    # Define upper-level constraints.
 
     # Flexible loads.
     for der_model in der_model_set.flexible_der_models.values():
@@ -310,6 +308,7 @@ def main():
             )
         )
 
+    # Define lower-level constraints.
 
     # Differential with respect to thermal power vector.
     problem.constraints.append(
@@ -662,153 +661,16 @@ def main():
         (1 - problem.psi_branch_power_magnitude_maximum_2)
         * problem.big_m_branch_power_magnitude_maximum_2
     )
-    
+
     # Define objective.
-
-    # Thermal grid.
     problem.objective += (
-        cp.sum(cp.multiply(
-            problem.mu_node_head_minium,
-            (
-                np.array([node_head_vector_minimum])
-                # - node_head_vector_reference
-                # + (
-                #     linear_thermal_grid_model.sensitivity_node_head_by_der_power
-                #     @ der_thermal_power_vector_reference
-                # )
-            )
-        ))
+        price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+        @ problem.source_thermal_power
+        * thermal_grid_model.cooling_plant_efficiency ** -1
     )
     problem.objective += (
-        cp.sum(cp.multiply(
-            problem.mu_branch_flow_maximum,
-            (
-                # - branch_flow_vector_reference
-                # + (
-                #     linear_thermal_grid_model.sensitivity_branch_flow_by_der_power
-                #     @ der_thermal_power_vector_reference
-                # )
-                - 1.0
-                * np.array([branch_flow_vector_maximum])
-            )
-        ))
-    )
-    problem.objective += (
-        cp.sum(cp.multiply(
-            problem.lambda_pump_power_equation,
-            (
-                0.0
-                # - pump_power_reference
-                # + (
-                #     linear_thermal_grid_model.sensitivity_pump_power_by_der_power
-                #     @ der_thermal_power_vector_reference
-                # )
-            )
-        ))
-    )
-
-    # Electric grid.
-    problem.objective += (
-        cp.sum(cp.multiply(
-            problem.mu_node_voltage_magnitude_minimum,
-            (
-                np.array([node_voltage_magnitude_vector_minimum])
-                - np.array([np.abs(linear_electric_grid_model.power_flow_solution.node_voltage_vector)])
-                + np.transpose(
-                    linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_active
-                    @ np.transpose([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-                + np.transpose(
-                    linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_reactive
-                    @ np.transpose([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-            )
-        ))
-    )
-    problem.objective += (
-        cp.sum(cp.multiply(
-            problem.mu_node_voltage_magnitude_maximum,
-            (
-                np.array([np.abs(linear_electric_grid_model.power_flow_solution.node_voltage_vector)])
-                - np.transpose(
-                    linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_active
-                    @ np.transpose([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-                - np.transpose(
-                    linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_reactive
-                    @ np.transpose([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-                - np.array([node_voltage_magnitude_vector_maximum])
-            )
-        ))
-    )
-    problem.objective += (
-        cp.sum(cp.multiply(
-            problem.mu_branch_power_magnitude_maximum_1,
-            (
-                np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_1)])
-                - np.transpose(
-                    linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_active
-                    @ np.transpose([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-                - np.transpose(
-                    linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_reactive
-                    @ np.transpose([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-                - np.array([branch_power_magnitude_vector_maximum])
-            )
-        ))
-    )
-    problem.objective += (
-        cp.sum(cp.multiply(
-            problem.mu_branch_power_magnitude_maximum_2,
-            (
-                np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_2)])
-                - np.transpose(
-                    linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_active
-                    @ np.transpose([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-                - np.transpose(
-                    linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_reactive
-                    @ np.transpose([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-                - np.array([branch_power_magnitude_vector_maximum])
-            )
-        ))
-    )
-    problem.objective += (
-        cp.sum(cp.multiply(
-            problem.lambda_loss_active_equation,
-            (
-                -1.0
-                * np.array([np.real(linear_electric_grid_model.power_flow_solution.loss)])
-                + np.transpose(
-                    linear_electric_grid_model.sensitivity_loss_active_by_der_power_active
-                    @ np.transpose([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-                + np.transpose(
-                    linear_electric_grid_model.sensitivity_loss_active_by_der_power_reactive
-                    @ np.transpose([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-            )
-        ))
-    )
-    problem.objective += (
-        cp.sum(cp.multiply(
-            problem.lambda_loss_reactive_equation,
-            (
-                -1.0
-                * np.array([np.imag(linear_electric_grid_model.power_flow_solution.loss)])
-                + np.transpose(
-                    linear_electric_grid_model.sensitivity_loss_reactive_by_der_power_active
-                    @ np.transpose([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-                + np.transpose(
-                    linear_electric_grid_model.sensitivity_loss_reactive_by_der_power_reactive
-                    @ np.transpose([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector)])
-                )
-            )
-        ))
+        price_data.price_timeseries.loc[:, ('active_power', 'source', 'source')].values.T
+        @ problem.source_active_power
     )
 
     # Solve problem.
