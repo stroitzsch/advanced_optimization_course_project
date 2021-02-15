@@ -115,7 +115,7 @@ def main():
     linear_electric_grid_model.power_flow_solution.loss *= 1 / base_power
     linear_electric_grid_model.power_flow_solution.node_voltage_vector *= 1 / base_voltage
 
-    # Limits
+    # Limits.
     node_voltage_magnitude_vector_minimum /= base_voltage
     node_voltage_magnitude_vector_maximum /= base_voltage
     branch_power_magnitude_vector_maximum /= base_power
@@ -831,6 +831,105 @@ def main():
         )
     )
 
+    # Additional results.
+    node_head_vector = (
+        pd.DataFrame(
+            cp.transpose(
+                linear_thermal_grid_model.sensitivity_node_head_by_der_power
+                @ cp.transpose(problem.der_thermal_power_vector)
+            ).value,
+            index=timesteps,
+            columns=thermal_grid_model.nodes
+        )
+    )
+    branch_flow_vector = (
+        pd.DataFrame(
+            cp.transpose(
+                linear_thermal_grid_model.sensitivity_branch_flow_by_der_power
+                @ cp.transpose(problem.der_thermal_power_vector)
+            ).value,
+            index=timesteps,
+            columns=thermal_grid_model.branches
+        )
+    )
+    node_voltage_vector = (
+        pd.DataFrame(
+            np.array([np.abs(linear_electric_grid_model.power_flow_solution.node_voltage_vector.ravel())])
+            + cp.transpose(
+                linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_active
+                @ cp.transpose(
+                    problem.der_active_power_vector
+                    - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                )
+                + linear_electric_grid_model.sensitivity_voltage_magnitude_by_der_power_reactive
+                @ cp.transpose(
+                    problem.der_reactive_power_vector
+                    - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                )
+            ).value,
+            index=timesteps,
+            columns=electric_grid_model.nodes
+        )
+    )
+    branch_power_vector_1 = (
+        pd.DataFrame(
+            np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_1.ravel())])
+            + cp.transpose(
+                linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_active
+                @ cp.transpose(
+                    problem.der_active_power_vector
+                    - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                )
+                + linear_electric_grid_model.sensitivity_branch_power_1_magnitude_by_der_power_reactive
+                @ cp.transpose(
+                    problem.der_reactive_power_vector
+                    - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                )
+            ).value,
+            index=timesteps,
+            columns=electric_grid_model.branches
+        )
+    )
+    branch_power_vector_2 = (
+        pd.DataFrame(
+            np.array([np.abs(linear_electric_grid_model.power_flow_solution.branch_power_vector_2.ravel())])
+            + cp.transpose(
+                linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_active
+                @ cp.transpose(
+                    problem.der_active_power_vector
+                    - np.array([np.real(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                )
+                + linear_electric_grid_model.sensitivity_branch_power_2_magnitude_by_der_power_reactive
+                @ cp.transpose(
+                    problem.der_reactive_power_vector
+                    - np.array([np.imag(linear_electric_grid_model.power_flow_solution.der_power_vector.ravel())])
+                )
+            ).value,
+            index=timesteps,
+            columns=electric_grid_model.branches
+        )
+    )
+    node_head_vector_per_unit = (
+        node_head_vector
+        / thermal_grid_model.node_head_vector_reference
+    )
+    branch_flow_vector_per_unit = (
+        branch_flow_vector
+        / thermal_grid_model.branch_flow_vector_reference
+    )
+    node_voltage_vector_per_unit = (
+        node_voltage_vector * base_voltage
+        / np.abs(electric_grid_model.node_voltage_vector_reference)
+    )
+    branch_power_vector_1_per_unit = (
+        branch_power_vector_1 * base_power
+        / electric_grid_model.branch_power_vector_magnitude_reference
+    )
+    branch_power_vector_2_per_unit = (
+        branch_power_vector_2 * base_power
+        / electric_grid_model.branch_power_vector_magnitude_reference
+    )
+
     # Store results.
     state_vector.to_csv(os.path.join(results_path, 'state_vector.csv'))
     control_vector.to_csv(os.path.join(results_path, 'control_vector.csv'))
@@ -853,6 +952,16 @@ def main():
     mu_branch_power_magnitude_maximum_2.to_csv(os.path.join(results_path, 'mu_branch_power_magnitude_maximum_2.csv'))
     lambda_loss_active_equation.to_csv(os.path.join(results_path, 'lambda_loss_active_equation.csv'))
     lambda_loss_reactive_equation.to_csv(os.path.join(results_path, 'lambda_loss_reactive_equation.csv'))
+    node_head_vector.to_csv(os.path.join(results_path, 'node_head_vector.csv'))
+    branch_flow_vector.to_csv(os.path.join(results_path, 'branch_flow_vector.csv'))
+    node_voltage_vector.to_csv(os.path.join(results_path, 'node_voltage_vector.csv'))
+    branch_power_vector_1.to_csv(os.path.join(results_path, 'branch_power_vector_1.csv'))
+    branch_power_vector_2.to_csv(os.path.join(results_path, 'branch_power_vector_2.csv'))
+    node_head_vector_per_unit.to_csv(os.path.join(results_path, 'node_head_vector_per_unit.csv'))
+    branch_flow_vector_per_unit.to_csv(os.path.join(results_path, 'branch_flow_vector_per_unit.csv'))
+    node_voltage_vector_per_unit.to_csv(os.path.join(results_path, 'node_voltage_vector_per_unit.csv'))
+    branch_power_vector_1_per_unit.to_csv(os.path.join(results_path, 'branch_power_vector_1_per_unit.csv'))
+    branch_power_vector_2_per_unit.to_csv(os.path.join(results_path, 'branch_power_vector_2_per_unit.csv'))
 
     # Print objective.
     objective = pd.Series(problem.objective.value, index=['objective'])
