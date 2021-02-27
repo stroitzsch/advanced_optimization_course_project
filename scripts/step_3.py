@@ -10,11 +10,11 @@ import plotly.graph_objects as go
 import shutil
 
 
-def main(run_standalone=None):
+def main(run_non_strategic=None):
 
     # Settings.
     scenario_name = 'course_project_step_3'
-    run_standalone = True if run_standalone is None else run_standalone
+    run_non_strategic = True if run_non_strategic is None else run_non_strategic
     results_path = os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'results', 'step_3')
 
     # Clear / instantiate results directory.
@@ -247,7 +247,7 @@ def main(run_standalone=None):
             )
         )
 
-    if run_standalone:
+    if run_non_strategic:
 
         # Define upper-level objective.
         problem.objective += (
@@ -988,7 +988,7 @@ def main(run_standalone=None):
         * cp.sum(problem.der_reactive_power_vector_generator)
     )
 
-    if run_standalone:
+    if run_non_strategic:
 
         # Invert sign of objective.
         problem.objective *= -1.0
@@ -1152,9 +1152,9 @@ def main(run_standalone=None):
         problem.objective *= -1.0
 
         # Solve problem.
-        fledge.utils.log_time('MPEC solution')
+        fledge.utils.log_time('strategic solution')
         problem.solve()
-        fledge.utils.log_time('MPEC solution')
+        fledge.utils.log_time('strategic solution')
 
     # Obtain results.
 
@@ -1555,14 +1555,14 @@ if __name__ == '__main__':
     if run_all:
         (
             results_path,
-            standalone_der_active_power_vector_flexible_load,
-            standalone_lambda_active_power_equation
-        ) = main(run_standalone=True)
+            non_strategic_der_active_power_vector_flexible_load,
+            non_strategic_lambda_active_power_equation
+        ) = main(run_non_strategic=True)
         (
             results_path,
-            mpec_der_active_power_vector_flexible_load,
-            mpec_lambda_active_power_equation
-        ) = main(run_standalone=False)
+            strategic_der_active_power_vector_flexible_load,
+            strategic_lambda_active_power_equation
+        ) = main(run_non_strategic=False)
     else:
         main()
 
@@ -1571,39 +1571,39 @@ if __name__ == '__main__':
         # DER active power.
         figure = go.Figure()
         figure.add_scatter(
-            x=mpec_der_active_power_vector_flexible_load.index,
-            y=mpec_der_active_power_vector_flexible_load.sum(axis='columns').abs().values,
+            x=strategic_der_active_power_vector_flexible_load.index,
+            y=strategic_der_active_power_vector_flexible_load.sum(axis='columns').abs().values,
             fill='tozeroy',
             line=go.scatter.Line(shape='hv'),
             name="Strategic"
         )
         figure.add_scatter(
-            x=standalone_der_active_power_vector_flexible_load.index,
-            y=standalone_der_active_power_vector_flexible_load.sum(axis='columns').abs().values,
+            x=non_strategic_der_active_power_vector_flexible_load.index,
+            y=non_strategic_der_active_power_vector_flexible_load.sum(axis='columns').abs().values,
             fill='tonexty',
             line=go.scatter.Line(shape='hv'),
             name="Non-strategic"
         )
         figure.update_layout(
-            yaxis_title=f"Active cooling load [MW]",
+            yaxis_title=f"Active power demand [MW]",
             xaxis=go.layout.XAxis(tickformat='%H:%M'),
             legend=go.layout.Legend(x=0.99, xanchor='auto', y=0.99, yanchor='auto'),
             margin=go.layout.Margin(b=40, r=30, t=10)
         )
-        fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'der_active_power_vector'))
+        fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'step_3_der_active_power_vector'))
 
         # Lambda active power.
         figure = go.Figure()
         figure.add_scatter(
-            x=mpec_lambda_active_power_equation.index,
-            y=mpec_lambda_active_power_equation.mean(axis='columns').abs().values,
+            x=strategic_lambda_active_power_equation.index,
+            y=strategic_lambda_active_power_equation.mean(axis='columns').abs().values,
             fill='tozeroy',
             line=go.scatter.Line(shape='hv'),
             name="Strategic"
         )
         figure.add_scatter(
-            x=standalone_lambda_active_power_equation.index,
-            y=standalone_lambda_active_power_equation.mean(axis='columns').abs().values,
+            x=non_strategic_lambda_active_power_equation.index,
+            y=non_strategic_lambda_active_power_equation.mean(axis='columns').abs().values,
             fill='tonexty',
             line=go.scatter.Line(shape='hv'),
             name="Non-strategic"
@@ -1614,19 +1614,23 @@ if __name__ == '__main__':
             legend=go.layout.Legend(x=0.99, xanchor='auto', y=0.99, yanchor='auto'),
             margin=go.layout.Margin(b=40, r=30, t=10)
         )
-        fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'lambda_active_power_equation'))
+        fledge.utils.write_figure_plotly(figure, os.path.join(results_path, 'step_3_lambda_active_power_equation'))
 
-        # Print flexible load operation cost.
-        cost_standalone = (
-            standalone_lambda_active_power_equation
-            * standalone_der_active_power_vector_flexible_load
+        # Print additional statistics.
+        non_strategic_cost_active_power = (
+            non_strategic_lambda_active_power_equation
+            * non_strategic_der_active_power_vector_flexible_load
         ).sum().sum()
-        cost_mpec = (
-            mpec_lambda_active_power_equation
-            * mpec_der_active_power_vector_flexible_load
+        strategic_cost_active_power = (
+            strategic_lambda_active_power_equation
+            * strategic_der_active_power_vector_flexible_load
         ).sum().sum()
-        print(f"cost_standalone = {cost_standalone}")
-        print(f"cost_mpec = {cost_mpec}")
+        non_strategic_sum_active_power = non_strategic_der_active_power_vector_flexible_load.sum().sum()
+        strategic_sum_active_power = strategic_der_active_power_vector_flexible_load.sum().sum()
+        print(f"non_strategic_cost_active_power = {non_strategic_cost_active_power}")
+        print(f"strategic_cost_active_power = {strategic_cost_active_power}")
+        print(f"non_strategic_sum_active_power = {non_strategic_sum_active_power}")
+        print(f"strategic_sum_active_power = {strategic_sum_active_power}")
 
         # Print results path.
         fledge.utils.launch(results_path)
