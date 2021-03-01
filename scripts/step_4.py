@@ -26,6 +26,9 @@ def main(admm_rho=None):
     # 5 - constrained electric grid voltage
     scenario_name = 'paper_2020_3'
 
+    # Suppress verbose solver output for ADMM runs.
+    fledge.config.config['optimization']['show_solver_output'] = False
+
     # Obtain results path.
     results_path = os.path.join(os.path.dirname(os.path.dirname(os.path.normpath(__file__))), 'results', 'step_4')
 
@@ -53,6 +56,7 @@ def main(admm_rho=None):
         )
     )
     thermal_grid_model = fledge.thermal_grid_models.ThermalGridModel(scenario_name)
+    thermal_grid_model.cooling_plant_efficiency = 10.0  # Change model parameter to incentivize use of thermal grid.
     # Use base scenario power flow for consistent linear model behavior and per unit values.
     thermal_power_flow_solution = fledge.thermal_grid_models.ThermalPowerFlowSolution('singapore_tanjongpagar_modified')
     linear_thermal_grid_model = (
